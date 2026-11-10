@@ -2,7 +2,7 @@
 
   mtnews-dl sources                      what each source covers and whether it is ready
   mtnews-dl download 2026-10             every ready source, into the current folder
-  mtnews-dl download --year 2025 --root /mnt/news     ->  ToM/2025, MTTD/2025, TALKMT/2025
+  mtnews-dl download --year 2025 --root ~/News         ->  ToM/2025, MTTD/2025, TALKMT/2025
   mtnews-dl download --date 2026-11-03 -s tom talkmt
   mtnews-dl review | recheck             across all sources
   mtnews-dl doctor [--fix]               check (and install) what is needed
