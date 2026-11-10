@@ -141,13 +141,46 @@ def profile_dir() -> Path:
     return data_dir("tom-dl") / "browser-profile"
 
 
+def own_browser_running() -> bool:
+    """Is tom-dl's browser window open? Checks that the profile lock's process is alive
+    (a lock left behind by a crash or a killed window does not count)."""
+    profile = profile_dir()
+    if os.name == "nt":
+        lock = profile / "lockfile"
+        if not lock.exists():
+            return False
+        try:
+            lock.unlink()          # only possible when no browser holds it
+            return False
+        except OSError:
+            return True
+    lock = profile / "SingletonLock"
+    try:
+        target = os.readlink(lock)           # "<hostname>-<pid>"
+    except OSError:
+        return False
+    try:
+        pid = int(target.rsplit("-", 1)[1])
+        os.kill(pid, 0)
+        return True
+    except (ValueError, IndexError, ProcessLookupError):
+        return False
+    except PermissionError:
+        return True
+
+
 def launch_own_browser(extension: Path, urls) -> bool:
-    """Start tom-dl's browser window with its own profile and the extension loaded."""
+    """Start tom-dl's browser window with its own profile and the extension loaded.
+
+    chrome-extension:// URLs only open once the extension is loaded, so they are passed only
+    to a window that is already running; a new window opens the connection tab by itself."""
     exe = own_browser()
     if not exe:
         return False
     profile = profile_dir()
     profile.mkdir(parents=True, exist_ok=True)
+    if not own_browser_running():
+        urls = [u for u in urls if not u.startswith("chrome-extension://")]
     args = [exe, f"--user-data-dir={profile}", f"--load-extension={extension}",
             "--no-first-run", "--no-default-browser-check", *urls]
     kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)

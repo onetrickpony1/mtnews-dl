@@ -91,7 +91,10 @@ def build_parser():
     old.add_argument("old_library", type=Path)
     used = arch_sub.add_parser("add-usage", help="count archive pages downloaded outside tom-dl")
     used.add_argument("pages", type=int)
-    for command in (status, old, used):
+    pages = arch_sub.add_parser("pages", help="list an issue's archive pages without downloading "
+                                "(uses no page allowance)")
+    pages.add_argument("dates", nargs="+", type=issue_date, metavar="YYYY-MM-DD")
+    for command in (status, old, used, pages):
         add_destination(command)
     return parser
 
@@ -231,7 +234,7 @@ def cmd_feed(args):
 def cmd_connect(args):
     from ...common import browser, system
     from ..tom_archive.chrome_bridge import (BRIDGE_URL, NotConnected, chrome_page, install_extension,
-                                             set_browser_mode)
+                                             own_extension_dir, set_browser_mode)
     from ..tom_archive.runner import Runner
     folder = install_extension()
     chrome = system.find_chrome()
@@ -244,7 +247,7 @@ def cmd_connect(args):
         print("Using tom-dl's own browser window (Chrome for Testing, separate profile). Sign in to "
               "timesofmalta.com in that window once; it is remembered for later runs.\n"
               "tom-dl never sees your password: the window does the downloading with your sign-in.")
-        browser.launch_own_browser(folder, [BRIDGE_URL, "https://timesofmalta.com/archive"])
+        browser.launch_own_browser(own_extension_dir(), [BRIDGE_URL, "https://timesofmalta.com/archive"])
     else:
         set_browser_mode("chrome")
         print(f"""Using your Chrome ({chrome}). The tom-dl extension is in:
@@ -311,6 +314,8 @@ def cmd_archive(args):
             print(f"Merged issues in {old / 'editions'} were not copied; move them into {root} and "
                   "tom-dl will check and keep them.")
         return 0
+    if args.archive_command == "pages":
+        return _archive_pages(args, target)
     ledger = Ledger(target)
     try:
         if args.archive_command == "add-usage":
@@ -324,6 +329,35 @@ def cmd_archive(args):
             print(f"Next page frees up at about {free}.")
     finally:
         ledger.close()
+    return 0
+
+
+def _archive_pages(args, target):
+    from ..tom_archive.chrome_bridge import NotConnected, chrome_page
+    from ..tom_archive.runner import IssueUnavailable, Runner
+    with interruptible() as stop:
+        try:
+            with chrome_page(stop, print) as page:
+                runner = Runner(dict(folder=str(target), interval=2, ceiling=DEFAULT_CEILING,
+                                     auto_resume=False), print, stop)
+                try:
+                    for date in args.dates:
+                        try:
+                            items = runner.list_issue(page, date)
+                        except IssueUnavailable as exc:
+                            print(exc)
+                            continue
+                        for page_id, url, _ in items:
+                            saved = "saved" if runner.ledger.valid(page_id) else "not saved"
+                            print(f"{date}\t{page_id}\t{saved}\t{url}")
+                finally:
+                    runner.close()
+        except NotConnected as exc:
+            _err(str(exc))
+            return EXIT_AUTH
+        except RuntimeError as exc:
+            _err(str(exc))
+            return EXIT_STOPPED
     return 0
 
 

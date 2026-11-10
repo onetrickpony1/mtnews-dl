@@ -6,10 +6,15 @@ chrome.action.onClicked.addListener(async () => {
   else await chrome.tabs.create({url});
 });
 
-// First install (e.g. loaded by tom-dl's own browser): open the connection tab straight away.
-chrome.runtime.onInstalled.addListener(async ({reason}) => {
-  if (reason !== 'install') return;
+// tom-dl's own browser window loads a copy of this extension that also contains autostart.js;
+// there the connection tab opens whenever the window starts. In your normal Chrome it opens
+// only once, right after you load the extension.
+let autostart = false;
+try { importScripts('autostart.js'); autostart = self.TOM_DL_AUTOSTART === true; } catch (_) {}
+async function openBridge() {
   const url = chrome.runtime.getURL('bridge.html');
   const tabs = await chrome.tabs.query({url});
-  if (!tabs.length) await chrome.tabs.create({url});
-});
+  if (!tabs.length) await chrome.tabs.create({url, index: 0});
+}
+chrome.runtime.onInstalled.addListener(({reason}) => { if (reason === 'install' || autostart) openBridge(); });
+chrome.runtime.onStartup.addListener(() => { if (autostart) openBridge(); });

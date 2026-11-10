@@ -29,8 +29,15 @@ def extension_dir() -> Path:
     return data_dir("tom-dl") / "chrome-extension"
 
 
+def own_extension_dir() -> Path:
+    return data_dir("tom-dl") / "own-browser-extension"
+
+
 def install_extension() -> Path:
-    """Copy the extension to a stable folder and create its pairing token (kept on reinstall)."""
+    """Copy the extension to stable folders and create its pairing token (kept on reinstall).
+
+    Returns the folder for your own Chrome; tom-dl's own browser uses a copy that also opens
+    the connection tab at start-up (own_extension_dir)."""
     target = extension_dir()
     ensure_private_dir(target.parent)
     target.mkdir(parents=True, exist_ok=True)
@@ -42,6 +49,13 @@ def install_extension() -> Path:
         token_file.write_text("const BRIDGE_TOKEN = " + json.dumps(secrets.token_urlsafe(32)) + ";\n")
         if os.name != "nt":
             token_file.chmod(0o600)
+    own = own_extension_dir()
+    own.mkdir(parents=True, exist_ok=True)
+    for name in EXTENSION_FILES + ("connection.js",):
+        (own / name).write_bytes((target / name).read_bytes())
+    (own / "autostart.js").write_text("self.TOM_DL_AUTOSTART = true;\n")
+    if os.name != "nt":
+        (own / "connection.js").chmod(0o600)
     return target
 
 
@@ -262,7 +276,7 @@ def chrome_page(stop, emit, timeout=60):
             if launch_at and time.monotonic() >= launch_at:
                 launch_at = None
                 from ...common.browser import launch_own_browser
-                if launch_own_browser(extension_dir(), [BRIDGE_URL]):
+                if launch_own_browser(own_extension_dir(), [BRIDGE_URL]):
                     emit("Started tom-dl's browser window.")
                     deadline = time.monotonic() + timeout
             if time.monotonic() >= deadline:
