@@ -362,6 +362,8 @@ def _archive_pages(args, target):
 
 
 def main(argv=None):
+    from mtnews_dl.common.cliargs import safe_console
+    safe_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.easy:

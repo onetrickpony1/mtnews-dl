@@ -395,6 +395,8 @@ def cmd_download(args, parser) -> int:
 
 
 def main(argv=None) -> int:
+    from mtnews_dl.common.cliargs import safe_console
+    safe_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.easy:

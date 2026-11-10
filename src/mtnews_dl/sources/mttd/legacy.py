@@ -128,7 +128,7 @@ class Client:
         path = self.cache / (token + '.data')
         meta = self.cache / (token + '.json')
         if not self.refresh and path.exists() and meta.exists():
-            record = json.loads(meta.read_text())
+            record = json.loads(meta.read_text(encoding="utf-8"))
             if sha(path) == record['sha256']:
                 return path.read_bytes(), record['retrieved_url']
         candidates = [url]
@@ -150,7 +150,7 @@ class Client:
                 temp.write_bytes(data)
                 os.replace(temp, path)
                 meta.write_text(json.dumps({'url': url, 'retrieved_url': retrieved,
-                                            'sha256': sha(path)}, indent=2))
+                                            'sha256': sha(path)}, indent=2), encoding="utf-8")
                 return data, retrieved
             except (OSError, ValueError, http.client.HTTPException) as exc:
                 if isinstance(exc, InterruptedError):
@@ -393,7 +393,7 @@ def run_legacy(library, years, months, only_date, delay, stop, emit, *, wayback=
     from .core import inspect_pdf
     client = Client(library.state_dir / 'legacy' / 'cache', stop, delay, wayback, library.refresh)
     with library_lock(library.state_dir / 'run.lock'):
-        library.rows = json.loads(library.state_file.read_text()) if library.state_file.exists() else {}
+        library.rows = json.loads(library.state_file.read_text(encoding="utf-8")) if library.state_file.exists() else {}
         issues, discovery_errors = ({}, []) if seeds else discover(client, years, months, only_date, emit)
         for seed in seeds:
             ident = issue_identity(seed)
@@ -403,7 +403,7 @@ def run_legacy(library, years, months, only_date, delay, stop, emit, *, wayback=
             issues[base] = (date, publication, canonical(seed))
         (library.state_dir / 'legacy').mkdir(parents=True, exist_ok=True)
         run_report = {'issues': len(issues), 'discovery_errors': discovery_errors}
-        (library.state_dir / 'legacy' / 'discovery.json').write_text(json.dumps(run_report, indent=2))
+        (library.state_dir / 'legacy' / 'discovery.json').write_text(json.dumps(run_report, indent=2), encoding="utf-8")
         emit(f'Legacy: selected {len(issues)} dated HTML issue indexes.')
         library.selected_keys = getattr(library, 'selected_keys', set())
         incomplete = bool(discovery_errors)
@@ -509,7 +509,7 @@ def run_legacy(library, years, months, only_date, delay, stop, emit, *, wayback=
                 old_path.rename(replaced / f'{iid}-{time.time_ns()}.pdf')
             manifest_path = folder / 'manifest.json'
             temp = manifest_path.with_suffix('.tmp')
-            temp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+            temp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
             os.replace(temp, manifest_path)
             part.unlink(missing_ok=True)
         return 3 if incomplete else 0

@@ -33,7 +33,7 @@ def posted_date(item, *, stop=None):
     """Read the reader's publish_date, never its later modification timestamp."""
     path = cache_path().with_name('posting-dates.json')
     try:
-        saved = json.loads(path.read_text())
+        saved = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         saved = {}
     iid = item['issue_id']

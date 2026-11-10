@@ -257,7 +257,7 @@ class Client:
         dest = self.root / 'images' / (token + '.png')
         metadata = dest.with_suffix('.json')
         try:
-            if not self.refresh and dest.exists() and json.loads(metadata.read_text())['sha256'] == sha(dest):
+            if not self.refresh and dest.exists() and json.loads(metadata.read_text(encoding="utf-8"))['sha256'] == sha(dest):
                 return str(dest)
         except (OSError, ValueError, KeyError):
             pass
@@ -292,7 +292,7 @@ def run_gap(library, years, months, only_date, delay, stop, emit, *, wayback=Tru
     shared.mkdir(parents=True, exist_ok=True)
     # Cross-library cache writes are serialized as well as destination state writes.
     with library_lock(library.state_dir / 'run.lock'), library_lock(shared / 'run.lock'):
-        library.rows = json.loads(library.state_file.read_text()) if library.state_file.exists() else {}
+        library.rows = json.loads(library.state_file.read_text(encoding="utf-8")) if library.state_file.exists() else {}
         catalog = load_catalog()
         client = Client(shared, stop, delay, wayback, library.refresh)
         groups = defaultdict(list)

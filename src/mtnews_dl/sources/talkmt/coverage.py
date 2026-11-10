@@ -41,7 +41,7 @@ def sample_date(month: str, publication: str, today=None):
 def load_results(path=None):
     path = Path(path or config_dir() / RESULTS)
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -50,7 +50,7 @@ def save_results(data, path=None):
     path = Path(path or config_dir() / RESULTS)
     ensure_private_dir(path.parent)
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".coverage-")
-    with os.fdopen(fd, "w") as out:
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
         json.dump(data, out, indent=2, sort_keys=True)
         out.write("\n")
     os.replace(temp, path)

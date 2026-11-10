@@ -43,8 +43,9 @@ class CookieImport(unittest.TestCase):
             self.assertEqual(info["dropped_other_domains"], 2)
             self.assertNotIn("GOOGLESECRET", text)
             self.assertNotIn("LOOKALIKE", text)
-            self.assertEqual(stat.S_IMODE(stored.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o700)
+            if os.name != "nt":   # Windows: the per-user profile folder is already private
+                self.assertEqual(stat.S_IMODE(stored.stat().st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o700)
             jar = auth.load_jar()
             self.assertEqual(sorted(c.name for c in jar), ["cf_session", "wordpress_logged_in_abc"])
 

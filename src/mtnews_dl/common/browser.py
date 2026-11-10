@@ -55,7 +55,7 @@ def own_browser():
     if not key or not marker.is_file():
         return None
     try:
-        exe = Path(json.loads(marker.read_text())["executable"])
+        exe = Path(json.loads(marker.read_text(encoding="utf-8"))["executable"])
     except (ValueError, KeyError):
         return None
     return str(exe) if exe.is_file() else None
@@ -117,7 +117,7 @@ def install_own_browser(emit=print) -> bool:
     if not exe.is_file():
         emit(f"Chrome for Testing was unpacked but {exe} is missing.")
         return False
-    (root / "current.json").write_text(json.dumps(dict(version=version, executable=str(exe))) + "\n")
+    (root / "current.json").write_text(json.dumps(dict(version=version, executable=str(exe))) + "\n", encoding="utf-8")
     for old in root.iterdir():   # keep only the current version
         if old.is_dir() and old.name not in (version,) and not old.name.startswith("."):
             shutil.rmtree(old, ignore_errors=True)

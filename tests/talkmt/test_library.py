@@ -63,7 +63,7 @@ class LibraryRuns(unittest.TestCase):
         lib, summary, _ = self.run_lib(routes, ["2026-11-03"])
         row = lib.rows["2026-11-03@l-orizzont-2026-11-03.pdf"]
         self.assertEqual((row["status"], row["detected_dates"]), ("wrong_date", ["2026-11-02"]))
-        self.assertIn("/.talkmt-dl/pending/", row["path"])
+        self.assertEqual(Path(row["path"]).parent.parts[-2:], (".talkmt-dl", "pending"))
         sidecar = json.loads(Path(row["path"]).with_suffix(".review.json").read_text())
         self.assertEqual(sidecar["issue_date"], "2026-11-03")
         self.assertFalse((self.root / "LOrizzont-2026-11-03.pdf").exists())

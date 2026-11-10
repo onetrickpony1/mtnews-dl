@@ -135,7 +135,7 @@ def snapshots_dir() -> Path:
 
 def _seed() -> dict:
     try:
-        return json.loads((files(__package__) / "data" / "links-seed.json").read_text())
+        return json.loads((files(__package__) / "data" / "links-seed.json").read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return {}
 
@@ -148,7 +148,7 @@ class LinkRecord:
         self.rows = _seed().get("dates", {})
         if self.path.exists():
             try:
-                own = json.loads(self.path.read_text()).get("dates", {})
+                own = json.loads(self.path.read_text(encoding="utf-8")).get("dates", {})
             except ValueError:
                 own = {}
             for date, row in own.items():
@@ -180,7 +180,7 @@ class LinkRecord:
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, temp = tempfile.mkstemp(dir=self.path.parent, prefix=".links-")
-        with os.fdopen(fd, "w") as out:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
             json.dump(dict(format=1, dates=dict(sorted(self.rows.items()))), out, indent=1)
             out.write("\n")
         os.replace(temp, self.path)

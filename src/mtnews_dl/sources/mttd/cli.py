@@ -89,12 +89,14 @@ DONE = ("verified", "verified_pdf", "accepted_by_user", "reconstructed")
 def read_review(root: Path, *, flat=False, everything=True) -> dict:
     """Read state without creating directories or acquiring a writer lock."""
     state = root.expanduser() / ".mttd-dl" / "state.json"
-    rows = json.loads(state.read_text()) if state.exists() else {}
+    rows = json.loads(state.read_text(encoding="utf-8")) if state.exists() else {}
     hidden = DONE if everything else DONE + ("unavailable", "failed")
     return {date: row for date, row in sorted(rows.items()) if row["status"] not in hidden}
 
 
 def main(argv=None) -> int:
+    from mtnews_dl.common.cliargs import safe_console
+    safe_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.easy:

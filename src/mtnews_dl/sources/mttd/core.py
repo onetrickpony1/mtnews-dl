@@ -100,11 +100,11 @@ class Library:
         self.state_dir = self.root / ".mttd-dl"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = self.state_dir / "state.json"
-        self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+        self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
 
     def save(self):
         temp = self.state_file.with_suffix(".tmp")
-        temp.write_text(json.dumps(self.rows, indent=2) + "\n")
+        temp.write_text(json.dumps(self.rows, indent=2) + "\n", encoding="utf-8")
         os.replace(temp, self.state_file)
 
     def final(self, key):
@@ -148,7 +148,7 @@ class Library:
 
     def accept(self, date):
         with library_lock(self.state_dir / "run.lock"):
-            self.rows = json.loads(self.state_file.read_text())
+            self.rows = json.loads(self.state_file.read_text(encoding="utf-8"))
             self._accept_locked(date)
 
     def _accept_locked(self, date):
@@ -167,10 +167,10 @@ class Library:
     def run(self, months, delay, stop, emit, *, only_dates=None):
         from .catalog import discover
         with library_lock(self.state_dir / "run.lock"):
-            self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+            self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
             emit("Loading all MediaToday archive listings…")
             entries = discover(stop=stop, emit=emit, refresh=self.refresh, publications=self.publications)
-            (self.state_dir / "publisher-catalog.json").write_text(json.dumps(entries, indent=2))
+            (self.state_dir / "publisher-catalog.json").write_text(json.dumps(entries, indent=2), encoding="utf-8")
             for month in sorted(set(months)):
                 year, mon = map(int, month.split("-"))
                 for day in range(1, calendar.monthrange(year, mon)[1] + 1):
@@ -212,7 +212,7 @@ class Library:
         from .catalog import discover
         from .dating import date_metadata
         with library_lock(self.state_dir / "run.lock"):
-            self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+            self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
             items = []
             discover(stop=stop, emit=emit, refresh=self.refresh,
                      publications=self.publications, archive_items=items)
@@ -247,7 +247,7 @@ class Library:
     def run_archives(self, archive_ids, delay, stop, emit):
         from .catalog import discover
         with library_lock(self.state_dir / "run.lock"):
-            self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+            self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
             items = []
             discover(stop=stop, emit=emit, refresh=self.refresh,
                      publications=self.publications, archive_items=items)
@@ -332,7 +332,7 @@ class Library:
     def recheck(self, emit=print):
         """Reinspect pending local PDFs only; never fetch a catalog or PDF."""
         with library_lock(self.state_dir / "run.lock"):
-            self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+            self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
             for key, row in list(self.rows.items()):
                 if row.get('status') in ('uncertain', 'wrong_date') and row.get('path'):
                     self._recheck_one(key, emit)

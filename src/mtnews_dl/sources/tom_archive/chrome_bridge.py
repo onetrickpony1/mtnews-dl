@@ -46,14 +46,14 @@ def install_extension() -> Path:
         (target / name).write_bytes((source / name).read_bytes())
     token_file = target / "connection.js"
     if not token_file.exists():
-        token_file.write_text("const BRIDGE_TOKEN = " + json.dumps(secrets.token_urlsafe(32)) + ";\n")
+        token_file.write_text("const BRIDGE_TOKEN = " + json.dumps(secrets.token_urlsafe(32)) + ";\n", encoding="utf-8")
         if os.name != "nt":
             token_file.chmod(0o600)
     own = own_extension_dir()
     own.mkdir(parents=True, exist_ok=True)
     for name in EXTENSION_FILES + ("connection.js",):
         (own / name).write_bytes((target / name).read_bytes())
-    (own / "autostart.js").write_text("self.TOM_DL_AUTOSTART = true;\n")
+    (own / "autostart.js").write_text("self.TOM_DL_AUTOSTART = true;\n", encoding="utf-8")
     if os.name != "nt":
         (own / "connection.js").chmod(0o600)
     return target
@@ -66,21 +66,21 @@ def settings_path() -> Path:
 def browser_mode():
     """'own' (tom-dl's Chrome for Testing window), 'chrome' (your Chrome) or None (not set up)."""
     try:
-        return json.loads(settings_path().read_text()).get("mode")
+        return json.loads(settings_path().read_text(encoding="utf-8")).get("mode")
     except (OSError, ValueError):
         return None
 
 
 def set_browser_mode(mode):
     settings_path().parent.mkdir(parents=True, exist_ok=True)
-    settings_path().write_text(json.dumps(dict(mode=mode)) + "\n")
+    settings_path().write_text(json.dumps(dict(mode=mode)) + "\n", encoding="utf-8")
 
 
 def read_token():
     path = extension_dir() / "connection.js"
     if not path.exists():
         return None
-    return json.loads(path.read_text().split("=", 1)[1].strip().rstrip(";"))
+    return json.loads(path.read_text(encoding="utf-8").split("=", 1)[1].strip().rstrip(";"))
 
 
 class ChromeBridge:

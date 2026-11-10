@@ -181,6 +181,16 @@ def months_of(dates) -> list:
     return sorted({d[:7] for d in dates})
 
 
+def safe_console():
+    """Never crash on characters the console's code page lacks (e.g. Maltese letters on a
+    redirected Windows console): show a replacement instead."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def printer(tool):
     def err(message):
         print(f"{tool}: {message}", file=sys.stderr)

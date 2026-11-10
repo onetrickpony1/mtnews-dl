@@ -38,11 +38,11 @@ class Library:
     # ---- state ---------------------------------------------------------
     def _load(self):
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+        self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
 
     def save(self):
         fd, temp = tempfile.mkstemp(dir=self.state_dir, prefix=".state-")
-        with os.fdopen(fd, "w") as out:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
             json.dump(self.rows, out, indent=2, ensure_ascii=False)
             out.write("\n")
             out.flush()
@@ -90,7 +90,7 @@ class Library:
                                           "pages", "sha256", "checked_at", "listed")}
         review["key"] = key
         review["how_to_accept"] = f"talkmt-dl accept {key} --yes  (after checking the printed date)"
-        Path(path).with_suffix(".review.json").write_text(json.dumps(review, indent=2, ensure_ascii=False) + "\n")
+        Path(path).with_suffix(".review.json").write_text(json.dumps(review, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     def record(self, key, path, inspection):
         self.rows[key].update(inspection, path=str(path),
@@ -401,4 +401,4 @@ def _now():
 def read_rows(root) -> dict:
     """Read state without locking or creating anything."""
     state = Path(root).expanduser() / STATE / "state.json"
-    return json.loads(state.read_text()) if state.exists() else {}
+    return json.loads(state.read_text(encoding="utf-8")) if state.exists() else {}

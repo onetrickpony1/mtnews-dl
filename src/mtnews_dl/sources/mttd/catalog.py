@@ -173,7 +173,7 @@ def discover(*, stop=None, emit=lambda _: None, refresh=False, publications=None
     path = cache_path()
     if not refresh and path.exists():
         try:
-            saved = json.loads(path.read_text())
+            saved = json.loads(path.read_text(encoding="utf-8"))
             age = time.time() - saved["saved_at"]
             if saved.get("version") == 6 and 0 <= age < TTL and valid_entries(saved["entries"]):
                 names = saved.get("publications", {})

@@ -208,7 +208,7 @@ def parse_listing(html: str) -> list:
 def load_patterns(path=None) -> dict:
     path = Path(path or patterns_path())
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
     for pub, templates in SEED.items():
@@ -221,7 +221,7 @@ def save_patterns(data, path=None):
     path = Path(path or patterns_path())
     ensure_private_dir(path.parent)
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".patterns-")
-    with os.fdopen(fd, "w") as out:
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
         json.dump(data, out, indent=2, ensure_ascii=False)
         out.write("\n")
     os.replace(temp, path)

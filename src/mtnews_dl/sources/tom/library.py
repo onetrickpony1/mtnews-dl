@@ -55,13 +55,13 @@ class Library:
 
     # ---- state ------------------------------------------------------------------------------
     def load(self):
-        self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
+        self.rows = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
         return self
 
     def save(self):
         self.state_dir.mkdir(parents=True, exist_ok=True)
         fd, temp = tempfile.mkstemp(dir=self.state_dir, prefix=".state-")
-        with os.fdopen(fd, "w") as out:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
             json.dump(self.rows, out, indent=2, ensure_ascii=False)
             out.write("\n")
             out.flush()
@@ -86,7 +86,7 @@ class Library:
             review = {k: self.rows[date].get(k) for k in ("status", "detected_dates", "method", "pages",
                                                           "sha256", "source", "route")}
             review.update(date=date, how_to_accept=f"tom-dl accept {date} --yes  (after checking the printed date)")
-            Path(path).with_suffix(".review.json").write_text(json.dumps(review, indent=2) + "\n")
+            Path(path).with_suffix(".review.json").write_text(json.dumps(review, indent=2) + "\n", encoding="utf-8")
 
     def promote(self, date, path) -> Path:
         dest = self.final(date)
