@@ -1,0 +1,20 @@
+# environments and build output
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+# never commit downloads, libraries, sessions or browser data
+library/
+*.pdf
+*.part
+.tom-dl/
+.mttd-dl/
+.talkmt-dl/
+cookies.txt
+*cookies*.txt
+connection.js
+browser-profile/
+progress.sqlite3

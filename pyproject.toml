@@ -1,0 +1,38 @@
+[project]
+name = "mtnews-dl"
+version = "1.0.0.dev0"
+description = "Download Maltese newspaper PDFs: Times of Malta, MaltaToday titles, l-orizzont and it-Torca. Resumable, paced, with printed-date checks."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = [
+    "pypdfium2>=4.30",      # PDF text, rendering and merging (bundled PDFium; no Poppler needed)
+    "pillow>=10",           # OCR crops; mttd-dl legacy page images
+    "beautifulsoup4>=4.12", # mttd-dl 2010-2013 web-article reconstruction
+    "reportlab>=4.0",       # mttd-dl rebuilt (HTML-only) issues as PDF
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+mtnews-dl = "mtnews_dl.umbrella:main"
+tom-dl = "mtnews_dl.sources.tom.cli:main"
+mttd-dl = "mtnews_dl.sources.mttd.cli:main"
+talkmt-dl = "mtnews_dl.sources.talkmt.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"mtnews_dl.sources.mttd" = ["data/*.json", "fonts/*"]
+"mtnews_dl.sources.tom" = ["data/*.json"]
+"mtnews_dl.sources.tom_archive" = ["extension/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
