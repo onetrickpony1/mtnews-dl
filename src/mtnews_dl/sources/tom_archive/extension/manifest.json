@@ -1,23 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Times of Malta \u2014 Desktop Downloader Bridge",
-  "version": "1.4.1",
-  "description": "Connect the local Python downloader to this signed-in Chrome profile.",
-  "permissions": [
-    "tabs",
-    "scripting",
-    "downloads",
-    "webRequest"
-  ],
-  "host_permissions": [
-    "https://timesofmalta.com/*",
-    "https://tom-media-prod.s3.eu-west-1.amazonaws.com/*",
-    "http://127.0.0.1:18769/*"
-  ],
-  "action": {
-    "default_title": "Connect desktop downloader"
-  },
-  "background": {
-    "service_worker": "background.js"
-  }
+  "name": "tom-dl archive connection",
+  "version": "2.0.0",
+  "description": "Lets tom-dl (mtnews-dl) use this signed-in Chrome profile to download Times of Malta archive pages.",
+  "permissions": ["tabs", "scripting", "downloads"],
+  "host_permissions": ["https://timesofmalta.com/*", "http://127.0.0.1:18769/*"],
+  "action": {"default_title": "Connect tom-dl"},
+  "background": {"service_worker": "background.js"}
 }

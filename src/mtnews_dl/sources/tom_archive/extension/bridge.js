@@ -112,89 +112,16 @@ async function loop() {
       const response = await fetch('http://127.0.0.1:18769/command', {headers});
       if (!response.ok) throw Error('Connection rejected; reload the installed companion extension.');
       const command = await response.json();
-      status.textContent = 'Connected to desktop app.';
+      status.textContent = 'Connected to tom-dl.';
       if (command) {
         let result;
         try { result = {id: command.id, value: await execute(command)}; }
-        catch (error) {
-          result = {id: command.id, error: String(error.message || error)};
-          if (command.action === 'download') {
-            const record = {event: 'download_failure_page', path: new URL(command.url).pathname,
-              timestamp: Date.now(), inspection_status: 'failed'};
-            try {
-              const state = await snapshot(archiveTab);
-              record.body = state.body;
-              record.inspection_status = 'captured';
-            } catch (_) { /* Explicit failure status travels with the command result. */ }
-            result.diagnostics = [record];
-          }
-        }
+        catch (error) { result = {id: command.id, error: String(error.message || error)}; }
         const sent = await fetch('http://127.0.0.1:18769/result', {method: 'POST', headers, body: JSON.stringify(result)});
-        if (!sent.ok) throw Error('Desktop app rejected result. Stop and review before resuming.');
+        if (!sent.ok) throw Error('tom-dl rejected a result. Stop and review before resuming.');
       }
-    } catch (error) { status.textContent = 'Waiting for desktop app: ' + error.message; }
+    } catch (error) { status.textContent = 'Waiting for tom-dl: ' + error.message; }
     await sleep(500);
   }
 }
 loop();
-
-// Independent of the command/download loop. Drop diagnostics if the app is
-// unavailable; never delay, retry, or change a publisher request for logging.
-let diagnosticsBusy = false;
-let deliveryFailures = 0, deliveryDroppedEvents = 0;
-setInterval(async () => {
-  if (diagnosticsBusy) return;
-  diagnosticsBusy = true;
-  let events;
-  try {
-    events = await chrome.runtime.sendMessage({type: 'drainDiagnostics'});
-    if (events?.length) {
-      for (const event of events) if (event.event === 'health') {
-        event.delivery_failures = deliveryFailures;
-        event.delivery_dropped_events = deliveryDroppedEvents;
-      }
-      const response = await fetch('http://127.0.0.1:18769/diagnostics', {
-      method: 'POST', headers, body: JSON.stringify(events), signal: AbortSignal.timeout(2000)
-      });
-      if (!response.ok) throw Error('Diagnostic delivery failed');
-    }
-  } catch (_) {
-    deliveryFailures++;
-    deliveryDroppedEvents += events?.length || 0;
-  } finally { diagnosticsBusy = false; }
-}, 2000);
-
-// Inspect only the app's archive tab. Keep structured signals, never page text.
-let lastSignals = '', signalsBusy = false;
-setInterval(async () => {
-  if (!archiveTab || signalsBusy) return;
-  signalsBusy = true;
-  try {
-    const current = await chrome.tabs.get(archiveTab);
-    const pageUrl = new URL(current.url);
-    if (pageUrl.origin !== 'https://timesofmalta.com' || !/^\/archive(?:\/issue)?$|^\/download\/\d{8}-\d+$|^\/restricted-access$/.test(pageUrl.pathname)) return;
-    const [result] = await chrome.scripting.executeScript({target: {tabId: archiveTab}, func: () => {
-      const patterns = {daily_limit: /daily.{0,30}(?:limit|allowance)|(?:limit|allowance).{0,30}(?:today|per day)|300.{0,20}pages/i,
-        limit_reached: /(?:limit|quota).{0,30}(?:reached|exceeded|exhausted)/i,
-        remaining: /(?:downloads?|pages?).{0,25}remaining|remaining.{0,25}(?:downloads?|pages?)/i,
-        reset: /(?:quota|limit|allowance).{0,40}reset|reset.{0,40}(?:quota|limit|allowance)/i,
-        try_later: /try again (?:later|tomorrow)|retry after/i,
-        access_challenge: /verify you are human|performing security verification/i};
-      const lines = (document.body?.innerText || '').split('\n').filter(line =>
-        Object.values(patterns).some(pattern => pattern.test(line)));
-      return {event: 'page_signals', path: location.pathname, timestamp: Date.now(),
-        signals: Object.entries(patterns).filter(([_, pattern]) => lines.some(line => pattern.test(line))).map(([name]) => name),
-        numbers: [...new Set(lines.flatMap(line => [...line.matchAll(/\b\d{1,5}\b/g)].map(match => Number(match[0]))))].slice(0, 20)};
-    }});
-    const record = {...result.result, event: 'page_inspection', inspection_status:
-      result.result.signals.length ? 'captured' : 'no_matching_text'};
-    const signature = JSON.stringify([record.path, record.signals, record.numbers]);
-    if (signature !== lastSignals) {
-      lastSignals = signature;
-      await chrome.runtime.sendMessage({type: 'pageSignals', record});
-    }
-  } catch (_) {
-    try { await chrome.runtime.sendMessage({type: 'pageSignals', record: {
-      event: 'page_inspection', path: '/archive', timestamp: Date.now(), inspection_status: 'failed'}}); } catch (_) {}
-  } finally { signalsBusy = false; }
-}, 5000);

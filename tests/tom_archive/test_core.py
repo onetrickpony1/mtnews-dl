@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from core import Ledger, WINDOW
+from mtnews_dl.sources.tom_archive.ledger import Ledger, WINDOW
 
 
 class LedgerTests(unittest.TestCase):

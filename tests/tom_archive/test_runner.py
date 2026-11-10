@@ -4,8 +4,8 @@ import threading
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
-from pypdf import PdfReader, PdfWriter
-from app import Runner, Stopped
+from tests.pdfs import blank_pdf, page_count
+from mtnews_dl.sources.tom_archive.runner import Runner, Stopped
 
 
 class RunnerTests(unittest.TestCase):
@@ -13,12 +13,11 @@ class RunnerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.runner = Runner(dict(folder=str(self.root), ceiling=290, interval=5,
-                                  auto_resume=False), queue.Queue(), threading.Event(), threading.Event())
+                                  auto_resume=False), lambda message: None, threading.Event())
         self.item = ('20211101-001', 'https://timesofmalta.com/download/20211101-001', 'https://timesofmalta.com/archive/issue?from=2021-11-01')
         self.runner.ledger.inventory('2021-11-01', [self.item])
         self.fixture = self.root / 'fixture.pdf'
-        writer = PdfWriter(); writer.add_blank_page(width=100, height=100)
-        writer.write(self.fixture); writer.close()
+        blank_pdf(self.fixture)
 
     def tearDown(self):
         self.runner.ledger.close(); self.temp.cleanup()
@@ -58,7 +57,7 @@ class RunnerTests(unittest.TestCase):
         output = self.root / 'editions/2021/Times-of-Malta-2021-11-01.pdf'
         self.assertFalse(output.exists())
         self.runner.assemble('2021-11-01', [self.item])
-        self.assertEqual(len(PdfReader(output).pages), 1)
+        self.assertEqual(page_count(output), 1)
 
     def test_restart_recovers_unrecorded_chrome_download_then_merges_without_redownload(self):
         second = ('20211101-002', self.item[1].replace('001', '002'), self.item[2])
@@ -66,7 +65,7 @@ class RunnerTests(unittest.TestCase):
         self.runner.ledger.reserve(self.item[0], 290)
         config = self.runner.c
         self.runner.ledger.close()
-        self.runner = Runner(config, queue.Queue(), threading.Event(), threading.Event())
+        self.runner = Runner(config, lambda message: None, threading.Event())
         page = self.page()
         page.completed_files.return_value = [{'url': self.item[1], 'filename': str(self.fixture),
                                               'endTime': '2026-11-01T00:00:00Z'}]
@@ -79,7 +78,7 @@ class RunnerTests(unittest.TestCase):
         self.runner.save_page(page, second)
         self.runner.assemble('2021-11-01', [self.item, second])
         output = self.root / 'editions/2021/Times-of-Malta-2021-11-01.pdf'
-        self.assertEqual(len(PdfReader(output).pages), 2)
+        self.assertEqual(page_count(output), 2)
         self.assertEqual(page.locator.return_value.click.call_count, 1)
         self.assertEqual(self.runner.ledger.used(), 2)
 

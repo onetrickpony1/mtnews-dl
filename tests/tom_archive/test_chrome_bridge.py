@@ -4,7 +4,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
-from chrome_bridge import ChromeBridge
+from mtnews_dl.sources.tom_archive.chrome_bridge import ChromeBridge
 
 class BridgeTests(unittest.TestCase):
     def setUp(self):

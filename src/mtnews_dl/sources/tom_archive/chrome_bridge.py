@@ -1,37 +1,61 @@
-"""Loopback bridge to a user-installed extension in their normal Chrome profile."""
+"""Loopback bridge to the tom-dl extension installed in the user's normal, signed-in Chrome.
+
+tom-dl never reads cookies or passwords: it asks the extension to open archive pages, read
+their links and click the site's own download controls. The bridge listens on 127.0.0.1
+only while a run is active, and every request must carry a random pairing token that
+`tom-dl connect` writes into the extension folder.
+"""
 import json
+import os
 import queue
 import secrets
 import shutil
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import files
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = Path(__file__).resolve().parent
+from ...common.paths import data_dir, ensure_private_dir
+
 PORT = 18769
+EXTENSION_FILES = ("manifest.json", "background.js", "bridge.html", "bridge.js")
 
 
-def prepare_extension():
-    path = HERE / 'chrome-extension' / 'connection.js'
+def extension_dir() -> Path:
+    return data_dir("tom-dl") / "chrome-extension"
+
+
+def install_extension() -> Path:
+    """Copy the extension to a stable folder and create its pairing token (kept on reinstall)."""
+    target = extension_dir()
+    ensure_private_dir(target.parent)
+    target.mkdir(parents=True, exist_ok=True)
+    source = files(__package__) / "extension"
+    for name in EXTENSION_FILES:
+        (target / name).write_bytes((source / name).read_bytes())
+    token_file = target / "connection.js"
+    if not token_file.exists():
+        token_file.write_text("const BRIDGE_TOKEN = " + json.dumps(secrets.token_urlsafe(32)) + ";\n")
+        if os.name != "nt":
+            token_file.chmod(0o600)
+    return target
+
+
+def read_token():
+    path = extension_dir() / "connection.js"
     if not path.exists():
-        path.write_text('const BRIDGE_TOKEN = ' + json.dumps(secrets.token_urlsafe(32)) + ';\n')
-        path.chmod(0o600)
-    return json.loads(path.read_text().split('=', 1)[1].strip().rstrip(';'))
+        return None
+    return json.loads(path.read_text().split("=", 1)[1].strip().rstrip(";"))
 
 
 class ChromeBridge:
-    def __init__(self, stop, token=None, port=PORT, diagnostic_root=None):
+    def __init__(self, stop, token=None, port=PORT):
         self.stop = stop
-        self.diagnostics = None
-        if diagnostic_root is not None:
-            try:
-                from diagnostics import Diagnostics
-                self.diagnostics = Diagnostics(Path(diagnostic_root))
-            except Exception:
-                pass  # Logging must not prevent the browser connection.
-        self.token = token or prepare_extension()
+        self.token = token or read_token()
+        if not self.token:
+            raise RuntimeError("The Chrome extension is not set up yet. Run: tom-dl connect")
         self.commands, self.results = queue.Queue(), queue.Queue()
         self.connected = threading.Event()
         bridge = self
@@ -72,7 +96,7 @@ class ChromeBridge:
             def do_POST(self):
                 if not self.authorized():
                     return self.reply(403, {})
-                if self.path not in ('/result', '/diagnostics'):
+                if self.path != '/result':
                     return self.reply(404, {})
                 length = int(self.headers.get('Content-Length', 0))
                 if not 0 < length <= 2_000_000:
@@ -81,10 +105,6 @@ class ChromeBridge:
                     result = json.loads(self.rfile.read(length))
                 except ValueError:
                     return self.reply(400, {})
-                if self.path == '/diagnostics':
-                    if bridge.diagnostics and isinstance(result, list):
-                        bridge.diagnostics.submit(result)
-                    return self.reply(200, {})
                 bridge.results.put(result)
                 self.reply(200, {})
 
@@ -107,19 +127,15 @@ class ChromeBridge:
                 continue
             if result.get('id') != identifier:
                 continue
-            if self.diagnostics and isinstance(result.get('diagnostics'), list):
-                self.diagnostics.submit(result['diagnostics'])
             if result.get('error'):
                 raise RuntimeError(result['error'])
             return result['value']
-        raise RuntimeError('Chrome connection timed out. Keep the companion extension tab open. No automatic retry.')
+        raise RuntimeError('Chrome connection timed out. Keep the tom-dl connection tab open in Chrome. No automatic retry.')
 
     def close(self):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
-        if self.diagnostics:
-            self.diagnostics.close()
 
 
 class ChromePage:
@@ -194,3 +210,38 @@ class ChromeLocator:
         if not path.is_absolute() or not path.is_file():
             raise RuntimeError('Chrome reported a download but its PDF file is unavailable locally.')
         self.page.pending.value = SimpleNamespace(failure=lambda: None, save_as=lambda dest: shutil.copyfile(path, dest))
+
+
+class NotConnected(RuntimeError):
+    pass
+
+
+CONNECT_HELP = """The tom-dl extension in Chrome is not connected. To connect:
+  1. Open Chrome (the profile where you are signed in to timesofmalta.com).
+  2. If you have not yet installed the extension: run `tom-dl connect` and follow its steps.
+  3. Click the tom-dl icon in Chrome's toolbar (puzzle-piece menu): a "tom-dl connection" tab
+     opens. Keep it open, then run the command again."""
+
+
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def chrome_page(stop, emit, timeout=60):
+    """Start the loopback bridge and wait for the extension's connection tab."""
+    try:
+        bridge = ChromeBridge(stop)
+    except OSError as exc:
+        raise NotConnected(f"Port {PORT} is in use (another tom-dl run?): {exc}") from None
+    try:
+        emit("Waiting for the tom-dl connection tab in Chrome…")
+        deadline = time.monotonic() + timeout
+        while not bridge.connected.wait(.2):
+            if stop.is_set():
+                raise InterruptedError
+            if time.monotonic() >= deadline:
+                raise NotConnected(CONNECT_HELP)
+        emit("Chrome connected.")
+        yield ChromePage(bridge)
+    finally:
+        bridge.close()
