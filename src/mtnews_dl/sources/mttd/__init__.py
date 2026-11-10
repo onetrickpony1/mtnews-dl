@@ -1,3 +1,1 @@
-"""mttd-dl: download publisher-linked MaltaToday issue PDFs."""
-
-__version__ = "0.8.1"
+"""mttd-dl: MaltaToday, Illum, BusinessToday and other MediaToday newspaper PDFs."""

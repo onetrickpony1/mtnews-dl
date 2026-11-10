@@ -11,7 +11,6 @@ import json
 import os
 import re
 import time
-import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -21,7 +20,8 @@ from xml.sax.saxutils import escape
 from bs4 import BeautifulSoup
 
 from .core import sha
-from .platform_support import library_lock
+from ... import __version__
+from .core import library_lock
 
 HOSTS = {'archive.maltatoday.com.mt': 'MaltaToday',
          'archive.businesstoday.com.mt': 'BusinessToday'}
@@ -108,7 +108,7 @@ class Client:
         if self.stop.wait(max(0, self.delay - (time.monotonic() - self.last))):
             raise InterruptedError('Stopped by user')
         self.last = time.monotonic()
-        req = urllib.request.Request(url, headers={'User-Agent': 'mttd-dl/0.8.1 (legacy preservation)'})
+        req = urllib.request.Request(url, headers={'User-Agent': f'mttd-dl/{__version__} (legacy preservation)'})
         with urllib.request.build_opener(Redirects()).open(req, timeout=35) as response:
             allowed_request(response.url)
             data = bytearray()
@@ -440,7 +440,7 @@ def run_legacy(library, years, months, only_date, delay, stop, emit, *, wayback=
                     if check['pages'] > 1 and check['status'] == 'verified':
                         native = (pdf_url, check)
                         break
-                except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                except (OSError, ValueError) as exc:
                     if isinstance(exc, InterruptedError):
                         raise
             manifest = {'version': RECONSTRUCTION_VERSION, 'date': date, 'publication': publication,

@@ -3,33 +3,24 @@
 import calendar
 import gzip
 import datetime as dt
-import hashlib
 import json
 import os
 import re
-import subprocess
-import tempfile
 import time
 import urllib.request
-import unicodedata
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
-from .platform_support import library_lock
+from ... import __version__
+from ...common.lock import library_lock as _lock
 
 
-MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
-MONTHS.update({"jannar": 1, "frar": 2, "marzu": 3, "april": 4, "mejju": 5,
-               "gunju": 6, "lulju": 7, "awwissu": 8, "settembru": 9,
-               "ottubru": 10, "novembru": 11, "dicembru": 12})
-DATE_CHECK_VERSION = 2
-DATE_RE = re.compile(
-    r"\b(" + "|".join(MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{4})\b", re.I
-)
-DMY_RE = re.compile(
-    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:(?:ta\s*['’]?|t\s*['’])\s*)?(" + "|".join(MONTHS) + r")\s*,?\s*(\d{4})\b", re.I
-)
+def library_lock(path):
+    return _lock(path, "mttd-dl")
+
+
+from ...common.pdfcheck import (DATE_CHECK_VERSION, MONTHS, check_structure, classify,  # noqa: F401
+                               dates_in, inspect_pdf, sha)
 
 
 def validate_download_date(value):
@@ -40,130 +31,6 @@ def validate_download_date(value):
     if date < dt.date(1930, 1, 1) or date > dt.date.today():
         raise ValueError("Issue date must be between 1930-01-01 and today.")
     return value
-
-
-def sha(path):
-    h = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
-def dates_in(text):
-    text = ''.join(ch for ch in unicodedata.normalize('NFKD', text)
-                   if not unicodedata.combining(ch))
-    text = " ".join(text.split())
-    found = set()
-    for pattern, order in ((DATE_RE, (2, 0, 1)), (DMY_RE, (2, 1, 0))):
-        for match in pattern.finditer(text):
-            values = match.groups()
-            try:
-                found.add(
-                    dt.date(
-                        int(values[order[0]]),
-                        MONTHS[values[order[1]].lower()],
-                        int(values[order[2]]),
-                    ).isoformat()
-                )
-            except ValueError:
-                pass
-    return sorted(found)
-
-
-def classify(expected, found):
-    if found == [expected]:
-        return "verified"
-    if found and expected not in found:
-        return "wrong_date"
-    return "uncertain"
-
-
-def inspect_pdf(path, expected):
-    path = Path(path)
-    with path.open("rb") as f:
-        if f.read(5) != b"%PDF-":
-            raise ValueError("Response is not a PDF (possibly a sign-in or security page).")
-    info = subprocess.run(
-        ["pdfinfo", str(path)], capture_output=True, text=True, check=True, timeout=45
-    ).stdout
-    match = re.search(r"^Pages:\s+(\d+)", info, re.M)
-    if not match or int(match[1]) < 1:
-        raise ValueError("PDF has no readable pages.")
-    text = subprocess.run(
-        ["pdftotext", "-f", "1", "-l", "1", "-layout", str(path), "-"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=45,
-    ).stdout
-    found = dates_in(text)
-    method = "embedded text (whole front page)"
-    # Masthead dates outrank dates mentioned in stories. Use actual PDF word positions.
-    try:
-        bbox = subprocess.run(
-            ["pdftotext", "-f", "1", "-l", "1", "-bbox-layout", str(path), "-"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=45,
-        ).stdout
-        tree = ET.fromstring(bbox)
-        ns = {"h": "http://www.w3.org/1999/xhtml"}
-        page = tree.find(".//h:page", ns)
-        height = float(page.get("height"))
-        lines = [
-            " ".join(w.text or "" for w in line.findall("h:word", ns))
-            for line in page.findall(".//h:line", ns)
-            if float(line.get("yMax")) <= height * 0.28
-        ]
-        masthead_dates = dates_in(" ".join(lines))
-        if masthead_dates:
-            found = masthead_dates
-            method = "embedded text (top 28% masthead region)"
-    except (ET.ParseError, AttributeError, ValueError, subprocess.SubprocessError):
-        pass
-    # Only OCR when no full written date is extractable. No image resampling.
-    if not found:
-        try:
-            with tempfile.TemporaryDirectory(prefix="mttd-date-") as temp:
-                prefix = str(Path(temp) / "front")
-                subprocess.run(
-                    [
-                        "pdftoppm",
-                        "-f",
-                        "1",
-                        "-l",
-                        "1",
-                        "-r",
-                        "150",
-                        "-singlefile",
-                        "-png",
-                        str(path),
-                        prefix,
-                    ],
-                    capture_output=True,
-                    check=True,
-                    timeout=60,
-                )
-                cmd = ["tesseract", prefix + ".png", "stdout", "-l", "eng", "--psm", "3"]
-                ocr = subprocess.run(
-                    cmd, capture_output=True, text=True, check=True, timeout=90
-                ).stdout
-                found = dates_in(ocr)
-                text += "\nOCR:\n" + ocr
-                method = "OCR" if found else "text + OCR; no date found"
-        except (OSError, subprocess.SubprocessError):
-            method = "text; OCR unavailable or failed"
-    return dict(
-        date_check_version=DATE_CHECK_VERSION,
-        status=classify(expected, found),
-        detected_dates=found,
-        method=method,
-        pages=int(match[1]),
-        sha256=sha(path),
-        front_text=text[:30000],
-    )
 
 
 def is_publisher_url(url):
@@ -190,7 +57,7 @@ class PublisherRedirectHandler(urllib.request.HTTPRedirectHandler):
 def fetch(url, dest=None, stop=None):
     if not is_publisher_url(url):
         raise ValueError("Unexpected download URL; stopped.")
-    req = urllib.request.Request(url, headers={"User-Agent": "mttd-dl/0.7.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": f"mttd-dl/{__version__} (mtnews-dl)"})
     with urllib.request.build_opener(PublisherRedirectHandler()).open(req, timeout=45) as response:
         if response.status != 200:
             raise ValueError(f"HTTP {response.status}; stopped.")
@@ -221,8 +88,11 @@ def fetch(url, dest=None, stop=None):
 
 
 class Library:
-    def __init__(self, root, *, flat=False, refresh=False):
+    def __init__(self, root, *, flat=False, refresh=False, dry_run=False, retries=0):
         self.refresh = refresh
+        self.dry_run = dry_run
+        self.retries = retries
+        self.selected_keys = set()
         self.publications = {}
         self.issue_metadata = {}
         self.flat = flat
@@ -292,9 +162,9 @@ class Library:
 
     def run_issue(self, date, stop, emit, *, delay=2):
         date = validate_download_date(date)
-        self.run([date[:7]], delay, stop, emit, only_date=date)
+        self.run([date[:7]], delay, stop, emit, only_dates={date})
 
-    def run(self, months, delay, stop, emit, *, only_date=None):
+    def run(self, months, delay, stop, emit, *, only_dates=None):
         from .catalog import discover
         with library_lock(self.state_dir / "run.lock"):
             self.rows = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
@@ -305,7 +175,7 @@ class Library:
                 year, mon = map(int, month.split("-"))
                 for day in range(1, calendar.monthrange(year, mon)[1] + 1):
                     date = f"{month}-{day:02d}"
-                    if only_date and date != only_date:
+                    if only_dates and date not in only_dates:
                         continue
                     if dt.date.fromisoformat(date) > dt.date.today():
                         continue
@@ -330,6 +200,7 @@ class Library:
                         if key not in self.rows and legacy.get('source') == url:
                             self.rows[key] = self.rows.pop(date)
                             self.save()
+                        self.selected_keys.add(key)
                         downloaded = self._download(key, date, url, stop, emit)
                         if downloaded and stop.wait(delay):
                             return
@@ -430,12 +301,15 @@ class Library:
             self.record(key, dest, check, url)
             emit(f"{key}: existing file {check['status']}.")
             return
+        if self.dry_run:
+            emit(f"{key}: would download {url}")
+            return False
         pending = self.state_dir / 'pending'
         pending.mkdir(exist_ok=True)
         part, path = pending / f'{key}.part', pending / f'{key}.pdf'
         emit(f"{key}: downloading whole issue…")
         try:
-            fetch(resolve_pdf(url, stop=stop), part, stop)
+            with_retries(lambda: fetch(resolve_pdf(url, stop=stop), part, stop), self.retries, stop, emit, key)
             with part.open('rb') as stream:
                 if stream.read(5) != b'%PDF-':
                     raise ValueError('Server returned non-PDF content; run stopped for review.')
@@ -482,18 +356,32 @@ class Library:
     def _inspect(path, date):
         try:
             if date is None:
-                with Path(path).open('rb') as stream:
-                    if stream.read(5) != b'%PDF-':
-                        raise ValueError('Response is not a PDF.')
-                info = subprocess.run(['pdfinfo', str(path)], capture_output=True,
-                                      text=True, check=True, timeout=45).stdout
-                match = re.search(r'^Pages:\s+(\d+)', info, re.M)
-                if not match or int(match[1]) < 1:
-                    raise ValueError('PDF has no readable pages.')
+                pages = check_structure(path)
                 return dict(date_check_version=DATE_CHECK_VERSION, status='verified_pdf',
                             detected_dates=[], method='PDF structure checked; catalog has no exact date',
-                            pages=int(match[1]), sha256=sha(path), front_text='')
+                            pages=pages, sha256=sha(path), front_text='')
             return inspect_pdf(path, date)
-        except (ValueError, subprocess.SubprocessError) as exc:
-            return dict(date_check_version=DATE_CHECK_VERSION, status='uncertain', detected_dates=[], method='PDF inspection failed',
-                        pages=0, sha256=sha(path), front_text=str(exc))
+        except (ValueError, OSError) as exc:
+            return dict(date_check_version=DATE_CHECK_VERSION, status='uncertain', detected_dates=[],
+                        method='PDF inspection failed', pages=0, sha256=sha(path), front_text=str(exc))
+
+
+def with_retries(call, retries, stop, emit, key):
+    """Retry timeouts, connection errors, 429 and 5xx with backoff; anything else stops."""
+    import socket
+    import urllib.error
+    for attempt in range(retries + 1):
+        try:
+            return call()
+        except urllib.error.HTTPError as exc:
+            if not (exc.code == 429 or exc.code >= 500) or attempt == retries:
+                raise
+            reason = f"HTTP {exc.code}"
+        except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
+            if attempt == retries:
+                raise
+            reason = f"network error: {getattr(exc, 'reason', exc)}"
+        wait = min(300, 15 * 2 ** attempt)
+        emit(f"{key}: {reason}; retrying in {wait}s ({attempt + 1}/{retries}).")
+        if stop.wait(wait):
+            raise InterruptedError("Stopped by user.")

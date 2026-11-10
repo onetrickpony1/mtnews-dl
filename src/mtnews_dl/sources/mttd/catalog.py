@@ -143,9 +143,10 @@ def issue_date(slug):
 
 
 def cache_path():
-    base = Path(os.environ.get("MTTD_DL_CACHE") or
-                str(Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "mttd-dl"))
-    return base.expanduser() / "catalog.json"
+    """~/.cache/mttd-dl/catalog.json on Linux (same as mttd-dl 0.8.1), per-OS cache folder elsewhere."""
+    from ...common.paths import cache_dir
+    override = os.environ.get("MTTD_DL_CACHE")
+    return Path(override) / "catalog.json" if override else cache_dir("mttd-dl") / "catalog.json"
 
 
 def valid_entries(entries):
@@ -246,7 +247,7 @@ def discover(*, stop=None, emit=lambda _: None, refresh=False, publications=None
     if archive_items is not None:
         archive_items.extend(items.values())
     if unparsed:
-        emit(f"{len(unparsed)} titles have no exact date; use --archive to include them.")
+        emit(f"{len(unparsed)} titles have no exact date; use --collection to include them.")
     path.parent.mkdir(parents=True, exist_ok=True)
     name = None
     try:

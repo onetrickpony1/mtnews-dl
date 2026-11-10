@@ -23,7 +23,8 @@ from bs4 import BeautifulSoup
 from .catalog import cache_path
 from .core import dates_in, sha
 from .legacy import render_pdf
-from .platform_support import library_lock
+from ... import __version__
+from .core import library_lock
 
 START, END = '2010-06-01', '2013-09-30'
 VERSION = 1
@@ -198,7 +199,7 @@ class Client:
         if self.stop.wait(max(0, interval - (time.monotonic() - self.last))):
             raise InterruptedError('Stopped by user')
         self.last = time.monotonic()
-        request = urllib.request.Request(url, headers={'User-Agent': 'mttd-dl/0.8.1 (article preservation)'})
+        request = urllib.request.Request(url, headers={'User-Agent': f'mttd-dl/{__version__} (article preservation)'})
         with urllib.request.build_opener(Redirects(asset)).open(request, timeout=35) as response:
             allowed_url(response.url, asset=asset)
             result = bytearray()

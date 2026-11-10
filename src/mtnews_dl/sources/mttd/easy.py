@@ -1,189 +1,51 @@
-"""Interactive terminal guide that delegates to the ordinary CLI."""
+"""mttd-dl --easy: a guided way to build and run an mttd-dl command."""
 
-import argparse
-import datetime as dt
-import os
-import shlex
-import subprocess
-import sys
-from pathlib import Path
-
-from .cli import delay_seconds, download_date, month, year
+from ...common.easy import (ask_dates, ask_delay, ask_destination, choice, confirm_and_run, guard,
+                            validated)
 from .catalog import ARCHIVE_NAMES
 
 
-class Cancelled(Exception):
-    pass
-
-
-def answer(prompt, default=""):
-    value = input(prompt).strip()
-    if value.lower() in {"q", "quit"}:
-        raise Cancelled
-    return value or default
-
-
-def choice(prompt, options, default):
-    while True:
-        value = answer(prompt, default).lower()
-        if value in options:
-            return options[value]
-        print("Please choose one of the letters shown (or Q to quit).")
-
-
-def validated(prompt, validator, default=""):
-    while True:
-        value = answer(prompt, default)
-        try:
-            return validator(value)
-        except (ValueError, argparse.ArgumentTypeError) as exc:
-            print(f"Please try again: {exc}")
-
-
-def months(value):
+def collections(value):
+    lookup = {str(i): str(i) for i in ARCHIVE_NAMES}
+    lookup.update({name.lower(): str(i) for i, name in ARCHIVE_NAMES.items()})
     values = value.replace(",", " ").split()
-    if not values:
-        raise ValueError("Enter at least one month, for example 2026-10.")
-    return sorted({month(item) for item in values})
-
-
-def years(value):
-    values = value.replace(",", " ").split()
-    if not values:
-        raise ValueError("Enter at least one year, for example 2025.")
-    return sorted({year(item) for item in values})
-
-
-def archives(value):
-    values = value.replace(',', ' ').split()
-    allowed = set(ARCHIVE_NAMES.values()) | {str(i) for i in ARCHIVE_NAMES}
-    if values == ['all']:
-        return values
-    if not values or any(item not in allowed for item in values):
-        raise ValueError("Enter archive names or IDs from the list, or all.")
-    return list(dict.fromkeys(values))
-
-
-def output_folder(value):
-    if not value:
-        raise ValueError("Enter a folder path.")
-    path = Path(value).expanduser().resolve()
-    if path.exists() and not path.is_dir():
-        raise ValueError("That path is a file, not a folder.")
-    for parent in path.parents:
-        if parent.exists() and not parent.is_dir():
-            raise ValueError("A parent path is a file, not a folder.")
-    return path
+    if values == ["all"]:
+        return ["all"]
+    if not values or any(v.lower() not in lookup for v in values):
+        raise ValueError("enter names or IDs from the list, or 'all'")
+    return [lookup[v.lower()] for v in values]
 
 
 def run_easy(run_command):
-    if not sys.stdin.isatty():
-        print(
-            "mttd-dl --easy needs an interactive terminal. Use 'mttd-dl --help' for scripting.",
-            file=sys.stderr,
-        )
-        return 1
-    try:
-        print(
-            "Welcome to mttd-dl! Press Enter for the shown default; type Q to quit at any question."
-        )
-        print("Downloads combine MediaToday PDF archives and surviving older HTML articles. Listing shows original PDF issues only.")
-        action = choice(
-            "What would you like? [S]ingle date (all papers) / [M]onth(s) / [Y]ear(s) / [A]rchive(s) / [L]ist available issues [S]: ",
-            {
-                "s": "single",
-                "single": "single",
-                "m": "months",
-                "months": "months",
-                "y": "years",
-                "year": "years",
-                "years": "years",
-                "a": "archives",
-                "archives": "archives",
-                "l": "list",
-                "list": "list",
-            },
-            "s",
-        )
-        today = dt.date.today()
+    def body():
+        print("Downloads combine the MediaToday PDF archives with older issues rebuilt from web "
+              "archives (before October 2013). No login is needed.")
+        action = choice("What would you like? [D]ownload by date / [C]ollection(s) / [L]ist available "
+                        "issues [D]: ", {"d": "dates", "c": "collections", "l": "list"}, "d")
         if action == "list":
-            selected = validated(
-                "Filter by month (YYYY-MM), or Enter for all: ",
-                lambda value: month(value) if value else "",
-            )
-            args = ["list"] + (["--month", selected] if selected else [])
-            description = f"List available issues: {selected or 'all dates'}"
+            return run_command(["list"])
+        if action == "collections":
+            for archive_id, name in ARCHIVE_NAMES.items():
+                print(f"  {archive_id}: {name}")
+            chosen = validated("Collection names/IDs (space separated), or all: ", collections)
+            args, description = ["download", "--collection", *chosen], f"Collections: {', '.join(chosen)}"
         else:
-            args = ["download"]
-            if action == "single":
-                default = today.isoformat()
-                selected = validated(
-                    f"Issue date (YYYY-MM-DD) [{default}]: ", download_date, default
-                )
-                args += ["--date", selected]
-                description = f"Download all papers dated: {selected}"
-            elif action == "archives":
-                for archive_id, name in ARCHIVE_NAMES.items():
-                    print(f"  {archive_id}: {name}")
-                selected = validated("Archive names/IDs (space separated), or all: ", archives)
-                args += ["--archive", *selected]
-                description = f"Download complete archive(s), including undated issues: {', '.join(selected)}"
-            elif action == "years":
-                default = str(today.year)
-                selected = validated(f"Year(s), separated by spaces or commas (YYYY) [{default}]: ",
-                                     years, default)
-                args += ["--year", *selected]
-                description = f"Download all archives by issue year (posting-date fallback): {', '.join(selected)}"
-            else:
-                default = today.strftime("%Y-%m")
-                selected = validated(
-                    f"Month(s), separated by spaces or commas (YYYY-MM) [{default}]: ",
-                    months,
-                    default,
-                )
-                args += selected
-                description = f"Download month(s): {', '.join(selected)}"
-            from .gap import gap_requested
-            if gap_requested(selected if action == "years" else [],
-                             selected if action == "months" else [],
-                             selected if action == "single" else None):
-                print("June 2010–September 2013 web articles are grouped into one searchable PDF per publication day.")
-                print("The first article scan may take hours; cached progress is reused across runs. These are not complete printed issues.")
-                source = choice("Sources: [A]ll / [H]TML only / [P]DFs only [A]: ",
+            dates, description = ask_dates()
+            args = ["download", *dates]
+            if any(a[:4].isdigit() and a < "2013-10" for a in dates):
+                print("June 2010–September 2013 web articles are grouped into one searchable PDF per "
+                      "day; the first scan can take hours (progress is cached). These are not printed issues.")
+                source = choice("Sources: [A]ll / [H]TML reconstruction only / [P]DFs only [A]: ",
                                 {"a": "", "h": "--legacy-only", "p": "--no-legacy"}, "a")
                 if source:
                     args.append(source)
-            here = choice(
-                f"Save PDFs directly in {Path.cwd()}? [Y/n]: ",
-                {"y": True, "yes": True, "n": False, "no": False},
-                "y",
-            )
-            folder = Path.cwd() if here else validated("Destination folder: ", output_folder)
-            if not here:
-                args += ["--output-dir", str(folder)]
-            description += f"\nDestination: {folder}\nPDFs will be saved directly in this folder."
-            if action in ("months", "years", "archives"):
-                delay = validated("Seconds between downloads (1–60) [2]: ", delay_seconds, "2")
-                args += ["--delay", str(delay)]
-                description += f"\nDelay between issues: {delay:g} seconds"
-            print("Existing verified PDFs are skipped. Uncertain files are kept for review.")
-        command = ["mttd-dl", *args]
-        rendered = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
-        print(f"\n{description}\nEquivalent command: {rendered}")
-        if not choice("Proceed? [y/N]: ", {"y": True, "yes": True, "n": False, "no": False}, "n"):
-            print("Cancelled. Nothing downloaded.")
-            return 0
-        result = run_command(args)
+        dest_args, dest_text = ask_destination()
+        delay_args, delay_text = ask_delay(2)
+        result = confirm_and_run("mttd-dl", args + dest_args + delay_args,
+                                 "\n".join((description, dest_text, delay_text)), run_command)
         if result == 3:
-            print("Some issues need review. Use 'mttd-dl review' in the destination folder.")
+            print("Some issues need review: mttd-dl review (in the destination folder).")
         elif result == 4:
-            print(
-                "No matching content was retrieved. Use 'mttd-dl --easy' and choose L to list available dates."
-            )
+            print("Nothing found for that date: mttd-dl list shows available dates.")
         return result
-    except (Cancelled, EOFError):
-        print("\nCancelled. Nothing downloaded.")
-        return 0
-    except KeyboardInterrupt:
-        print("\nCancelled.")
-        return 130
+    return guard("mttd-dl", body)
