@@ -210,7 +210,9 @@ def main(argv=None) -> int:
                 else:
                     library.run(sorted(set(args.months)), args.delay, stop, emit)
                 if args.dry_run:
-                    if not (args.archive or args.no_legacy):
+                    early = ((args.dates or [args.date or "9999"])[0] < "2013-10"
+                             or any(p < "2013-10" for p in args.months + args.years))
+                    if early and not (args.archive or args.no_legacy):
                         emit("Dry run: web-archive reconstruction (before October 2013) is not previewed.")
                     return 0
                 if args.dates:

@@ -1,0 +1,53 @@
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from mtnews_dl import umbrella
+
+
+class UmbrellaTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        env = mock.patch.dict(os.environ, {"TALKMT_DL_CONFIG": str(Path(self.temp.name) / "cfg")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.calls = []
+
+        def fake_main(src):
+            return lambda argv: self.calls.append((src.key, argv)) or 0
+        patch = mock.patch.object(umbrella.Source, "main", fake_main)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_root_splits_ranges_by_year_and_source(self):
+        root = Path(self.temp.name) / "news"
+        code = umbrella.main(["download", "--from", "2025-12-31", "--to", "2026-01-01",
+                              "--root", str(root), "-s", "tom", "--archive"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.calls, [
+            ("tom", ["download", "--from", "2025-12-31", "--to", "2025-12-31", "-P", str(root / "ToM/2025"), "--archive"]),
+            ("tom", ["download", "--from", "2026-01-01", "--to", "2026-01-01", "-P", str(root / "ToM/2026"), "--archive"]),
+        ])
+
+    def test_subscription_source_without_session_is_skipped_unless_asked(self):
+        umbrella.main(["download", "--date", "2026-11-03"])
+        self.assertEqual([k for k, _ in self.calls], ["tom", "mttd"])
+        self.calls.clear()
+        umbrella.main(["download", "--date", "2026-11-03", "-s", "talkmt"])
+        self.assertEqual([k for k, _ in self.calls], ["talkmt"])
+
+    def test_most_serious_exit_code_wins(self):
+        self.assertEqual(umbrella.worst([0, 3, 4]), 3)
+        self.assertEqual(umbrella.worst([3, 5, 1]), 5)
+        self.assertEqual(umbrella.worst([0, 130]), 130)
+
+    def test_same_options_reach_every_tool(self):
+        umbrella.main(["download", "2026-10", "--delay", "4", "--dry-run", "-P", "out", "-s", "mttd"])
+        self.assertEqual(self.calls, [("mttd", ["download", "2026-10", "-P", "out", "--delay", "4", "--dry-run"])])
+
+
+if __name__ == "__main__":
+    unittest.main()
