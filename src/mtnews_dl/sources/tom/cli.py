@@ -20,11 +20,11 @@ from ...common.cliargs import (EXIT_AUTH, EXIT_ERROR, EXIT_INTERRUPTED, EXIT_NOT
                                expand_dates, interruptible, issue_date, period, printer)
 from ...common.paths import data_dir
 from . import feed
+from ..tom_archive.runner import DEFAULT_CEILING
 from .library import DONE, EPAPER_START, REVIEW, Library, StopRun, read_rows
 
 PROG = "tom-dl"
 _err = printer(PROG)
-DEFAULT_CEILING = 290
 
 
 def ceiling(value):
@@ -49,8 +49,7 @@ def build_parser():
     download.add_argument("--max-pages", type=ceiling, metavar="N",
                           help="archive: stop after requesting N pages in this run")
     download.add_argument("--ceiling", type=ceiling, default=DEFAULT_CEILING, metavar="N",
-                          help=f"archive: local page allowance per rolling 24 h (default {DEFAULT_CEILING}; "
-                               "the publisher's is about 300)")
+                          help=f"archive: local page allowance per rolling 24 h (default {DEFAULT_CEILING})")
     download.add_argument("--wait", action="store_true",
                           help="archive: wait for the local allowance to free up instead of stopping")
     download.add_argument("--offline", action="store_true",
@@ -79,7 +78,11 @@ def build_parser():
     imp.add_argument("files", nargs="+", type=Path)
     feed_sub.add_parser("status", help="how many dates the record covers")
 
-    commands.add_parser("connect", help="set up and test the Chrome extension used for the archive")
+    connect = commands.add_parser("connect", help="set up Chrome for the archive and check your sign-in")
+    which = connect.add_mutually_exclusive_group()
+    which.add_argument("--own-browser", action="store_true",
+                       help="use tom-dl's own browser window (downloaded if needed), not your Chrome")
+    which.add_argument("--my-chrome", action="store_true", help="use your installed Chrome")
     arch = commands.add_parser("archive", help="archive allowance and earlier archive-downloader libraries")
     arch_sub = arch.add_subparsers(dest="archive_command", metavar="ACTION", required=True)
     status = arch_sub.add_parser("status", help="pages used in the last 24 hours, saved pages")
@@ -225,24 +228,40 @@ def cmd_feed(args):
     return 0
 
 
-def cmd_connect(_args):
-    from ..tom_archive.chrome_bridge import NotConnected, chrome_page, install_extension
+def cmd_connect(args):
+    from ...common import browser, system
+    from ..tom_archive.chrome_bridge import (BRIDGE_URL, NotConnected, chrome_page, install_extension,
+                                             set_browser_mode)
     from ..tom_archive.runner import Runner
     folder = install_extension()
-    print(f"""The tom-dl Chrome extension is in:
+    chrome = system.find_chrome()
+    own = args.own_browser or (not args.my_chrome and (chrome is None or browser.own_browser()))
+    if own:
+        if not browser.own_browser() and not browser.install_own_browser():
+            _err("tom-dl's browser could not be installed; install Google Chrome and run tom-dl connect again.")
+            return EXIT_ERROR
+        set_browser_mode("own")
+        print("Using tom-dl's own browser window (Chrome for Testing, separate profile). Sign in to "
+              "timesofmalta.com in that window once; it is remembered for later runs.\n"
+              "tom-dl never sees your password: the window does the downloading with your sign-in.")
+        browser.launch_own_browser(folder, [BRIDGE_URL, "https://timesofmalta.com/archive"])
+    else:
+        set_browser_mode("chrome")
+        print(f"""Using your Chrome ({chrome}). The tom-dl extension is in:
   {folder}
 
-One-time setup in Google Chrome (the profile where you are signed in to timesofmalta.com):
+One-time setup in Chrome (the profile where you are signed in to timesofmalta.com):
   1. Open chrome://extensions and switch on "Developer mode" (top right).
   2. Click "Load unpacked" and choose the folder above.
   3. Click the extensions (puzzle-piece) icon, pin "tom-dl archive connection", then click it:
      a "tom-dl connection" tab opens. Keep it open while tom-dl uses the archive.
 tom-dl never reads your cookies or password; Chrome does the downloading with your own sign-in.
 Tip: in Chrome's download settings, turn off "Ask where to save each file".
+(Prefer a separate window instead? tom-dl connect --own-browser)
 """)
-    if not sys.stdin.isatty():
-        return 0
-    input("Press Enter once the connection tab is open (Ctrl+C to finish later)… ")
+        if not sys.stdin.isatty():
+            return 0
+        input("Press Enter once the connection tab is open (Ctrl+C to finish later)… ")
     with interruptible() as stop:
         try:
             with chrome_page(stop, print, timeout=120) as page:

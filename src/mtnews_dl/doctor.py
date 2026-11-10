@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 from . import __version__
-from .common import ocr, system
+from .common import browser, ocr, system
 
 
 def _line(ok, label, detail):
@@ -53,14 +53,25 @@ def doctor(fix=False, interactive=None) -> int:
     dates = record.dates()
     _line(True, "tom (e-paper)", f"no login needed; link record covers {len(dates)} dates"
           + (f" ({dates[0]} to {dates[-1]})" if dates else ""))
-    from .sources.tom_archive.chrome_bridge import extension_dir
+    from .sources.tom_archive.chrome_bridge import browser_mode, extension_dir
     chrome = system.find_chrome()
-    if (extension_dir() / "connection.js").exists():
-        _line(True, "tom (archive)", f"Chrome extension prepared in {extension_dir()}"
-              + ("" if chrome else "; Chrome not found"))
+    if fix and not chrome and not browser.own_browser():
+        browser.install_own_browser()
+    own = browser.own_browser()
+    if chrome:
+        _line(True, "browser", f"Chrome found ({chrome})")
+    elif own:
+        _line(True, "browser", f"tom-dl's own browser (Chrome for Testing): {own}")
     else:
-        _line(None, "tom (archive)", "optional, premium: run  tom-dl connect  once"
-              + ("" if chrome else " (needs Google Chrome)"))
+        problems += 1
+        _line(False, "browser", "no Chrome found; the Times of Malta archive needs one. Install: "
+              "mtnews-dl doctor --fix  (downloads tom-dl's own browser, ~150 MB) or install Google Chrome")
+    mode = browser_mode()
+    if (extension_dir() / "connection.js").exists() and mode:
+        _line(True, "tom (archive)", "set up (" + ("tom-dl's own browser window" if mode == "own"
+              else "your Chrome with the tom-dl extension") + "); premium sign-in needed")
+    else:
+        _line(None, "tom (archive)", "optional, premium: run  tom-dl connect  once")
     _line(True, "mttd", "no login needed")
     from .sources.talkmt.auth import offline_status
     talk = offline_status()

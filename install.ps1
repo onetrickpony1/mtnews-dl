@@ -9,8 +9,9 @@
 #   1. installs uv (https://docs.astral.sh/uv/) if missing: it brings its own Python
 #   2. installs mtnews-dl with its Python packages in an isolated environment
 #   3. puts mtnews-dl, tom-dl, mttd-dl and talkmt-dl on your PATH
-#   4. checks everything with `mtnews-dl doctor`, offering to install the optional OCR engine
-#      (Tesseract, via winget) and its English + Maltese language data
+#   4. checks everything with `mtnews-dl doctor`, offering to install the OCR engine
+#      (Tesseract, via winget) with English + Maltese data and, if no Chrome is installed,
+#      a private Chrome for Testing for the Times of Malta archive
 # Run it again to update. Uninstall: uv tool uninstall mtnews-dl
 
 # "Continue": Windows PowerShell turns harmless messages from programs into errors under "Stop";
@@ -57,7 +58,7 @@ if (-not (Test-Path $MT)) { Fail "mtnews-dl was installed but $MT is missing" }
 Say "Checking the installation"
 $answer = ""
 if ([Environment]::UserInteractive -and -not $env:CI) {
-    try { $answer = Read-Host "Install the optional OCR engine (Tesseract) and English + Maltese data? It reads dates from scanned front pages. [Y/n]" } catch { $answer = "" }
+    try { $answer = Read-Host "Install the remaining parts: OCR engine (Tesseract) + English/Maltese data, and a browser for the Times of Malta archive if no Chrome is installed? [Y/n]" } catch { $answer = "" }
 }
 if (-not $env:CI -and ($answer -eq "" -or $answer -match "^[Yy]")) { & $MT doctor --fix } else { & $MT doctor }
 

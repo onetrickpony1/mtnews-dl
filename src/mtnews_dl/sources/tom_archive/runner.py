@@ -1,8 +1,7 @@
 """Times of Malta digital archive (timesofmalta.com/archive), driven through the user's
 signed-in Chrome via the tom-dl extension.
 
-The archive serves one PDF per page, with a daily page allowance (300 pages/day was observed
-for a premium account; the reset time is unknown). Every click is reserved in a local rolling
+The archive serves one PDF per page, with a daily page allowance for premium accounts (the reset time is unknown). Every click is reserved in a local rolling
 24-hour ledger *before* it happens, uncertain attempts stay counted, saved pages are checked by
 SHA-256, and a whole issue is only merged once every listed page is verified.
 """
@@ -20,7 +19,7 @@ from ...common.pdfcheck import check_structure, merge
 from .ledger import Ledger
 
 BASE = 'https://timesofmalta.com'
-DEFAULT_CEILING = 290   # below the observed 300 pages/day
+DEFAULT_CEILING = 302   # local pages per rolling 24 hours (owner's setting)
 
 
 def listing_key(url):

@@ -10,8 +10,9 @@
 #   1. installs uv (https://docs.astral.sh/uv/) if missing: it brings its own Python
 #   2. installs mtnews-dl with its Python packages in an isolated environment
 #   3. puts mtnews-dl, tom-dl, mttd-dl and talkmt-dl on your PATH
-#   4. checks everything with `mtnews-dl doctor`, offering to install the optional OCR engine
-#      (Tesseract) and its English + Maltese language data
+#   4. checks everything with `mtnews-dl doctor`, offering to install the OCR engine
+#      (Tesseract) with English + Maltese data and, if no Chrome is installed, a private
+#      Chrome for Testing for the Times of Malta archive
 # Run it again to update. Uninstall: uv tool uninstall mtnews-dl
 set -eu
 
@@ -72,7 +73,7 @@ MT="$BIN/mtnews-dl"
 
 # 4. dependency check (+ optional OCR)
 say "Checking the installation"
-if [ -z "${CI:-}" ] && ask "Install the optional OCR engine (Tesseract) and English + Maltese data? It reads dates from scanned front pages. [Y/n]" y; then
+if [ -z "${CI:-}" ] && ask "Install the remaining parts: OCR engine (Tesseract) + English/Maltese data, and a browser for the Times of Malta archive if no Chrome is installed? [Y/n]" y; then
     "$MT" doctor --fix || true
 else
     "$MT" doctor || true

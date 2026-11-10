@@ -1,10 +1,22 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqvIxwa/E1/Qa8fU9ezSGxNYQtiYB5MGXBu2RCt0yoSx/0jqK3wkRHvSfI3gVvQNx1YYKWLEO9zDlqM4cJ4sDFah9lJwY/4pF2KAaqiA/9qGJ61VW1oXaEoLGkkIW9m6wcPZAXkkLhnfI2BLlOJ+f/DjVtPq5+eME2SceHBBXy+wt9uNNVUu9365Q/O+xlyuQGwO8CG7FbSNRPJcCZWGMN19nJKgZfAuvyN5TB+g06a2HG2VijIMK++J0iLYKjseula0iFnBZoegvQ9At6d3Xn1eNldepLVUhNY9I1gLpArtyRxB1gx/FJe8iz+X1XV4JlFYGumpjiYJ8j6o/ztPy9QIDAQAB",
   "name": "tom-dl archive connection",
   "version": "2.0.0",
   "description": "Lets tom-dl (mtnews-dl) use this signed-in Chrome profile to download Times of Malta archive pages.",
-  "permissions": ["tabs", "scripting", "downloads"],
-  "host_permissions": ["https://timesofmalta.com/*", "http://127.0.0.1:18769/*"],
-  "action": {"default_title": "Connect tom-dl"},
-  "background": {"service_worker": "background.js"}
+  "permissions": [
+    "tabs",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://timesofmalta.com/*",
+    "http://127.0.0.1:18769/*"
+  ],
+  "action": {
+    "default_title": "Connect tom-dl"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
 }

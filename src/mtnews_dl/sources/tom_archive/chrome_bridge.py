@@ -20,6 +20,8 @@ from types import SimpleNamespace
 from ...common.paths import data_dir, ensure_private_dir
 
 PORT = 18769
+EXTENSION_ID = "bahlcnkdemiaaeaphadjidhhdoohpdod"   # fixed by the "key" in extension/manifest.json
+BRIDGE_URL = f"chrome-extension://{EXTENSION_ID}/bridge.html"
 EXTENSION_FILES = ("manifest.json", "background.js", "bridge.html", "bridge.js")
 
 
@@ -41,6 +43,23 @@ def install_extension() -> Path:
         if os.name != "nt":
             token_file.chmod(0o600)
     return target
+
+
+def settings_path() -> Path:
+    return data_dir("tom-dl") / "browser.json"
+
+
+def browser_mode():
+    """'own' (tom-dl's Chrome for Testing window), 'chrome' (your Chrome) or None (not set up)."""
+    try:
+        return json.loads(settings_path().read_text()).get("mode")
+    except (OSError, ValueError):
+        return None
+
+
+def set_browser_mode(mode):
+    settings_path().parent.mkdir(parents=True, exist_ok=True)
+    settings_path().write_text(json.dumps(dict(mode=mode)) + "\n")
 
 
 def read_token():
@@ -216,11 +235,11 @@ class NotConnected(RuntimeError):
     pass
 
 
-CONNECT_HELP = """The tom-dl extension in Chrome is not connected. To connect:
-  1. Open Chrome (the profile where you are signed in to timesofmalta.com).
-  2. If you have not yet installed the extension: run `tom-dl connect` and follow its steps.
-  3. Click the tom-dl icon in Chrome's toolbar (puzzle-piece menu): a "tom-dl connection" tab
-     opens. Keep it open, then run the command again."""
+CONNECT_HELP = """tom-dl's Chrome connection is not open. To connect:
+  * First time: run `tom-dl connect` and follow its steps.
+  * Using your own Chrome: open it, click the tom-dl icon in the toolbar (puzzle-piece menu) so
+    the "tom-dl connection" tab opens, keep it open, then run the command again.
+  * Using tom-dl's own browser: it starts by itself; if it did not, run `tom-dl connect`."""
 
 
 from contextlib import contextmanager  # noqa: E402
@@ -236,9 +255,16 @@ def chrome_page(stop, emit, timeout=60):
     try:
         emit("Waiting for the tom-dl connection tab in Chrome…")
         deadline = time.monotonic() + timeout
+        launch_at = time.monotonic() + 3 if browser_mode() == "own" else None
         while not bridge.connected.wait(.2):
             if stop.is_set():
                 raise InterruptedError
+            if launch_at and time.monotonic() >= launch_at:
+                launch_at = None
+                from ...common.browser import launch_own_browser
+                if launch_own_browser(extension_dir(), [BRIDGE_URL]):
+                    emit("Started tom-dl's browser window.")
+                    deadline = time.monotonic() + timeout
             if time.monotonic() >= deadline:
                 raise NotConnected(CONNECT_HELP)
         emit("Chrome connected.")

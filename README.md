@@ -24,8 +24,10 @@ No admin rights are needed. The installer:
 1. installs [uv](https://docs.astral.sh/uv/), which downloads its own Python if needed;
 2. installs mtnews-dl and its Python packages in an isolated environment, and puts
    `mtnews-dl`, `tom-dl`, `mttd-dl` and `talkmt-dl` on your PATH;
-3. runs `mtnews-dl doctor`, offering to install the optional OCR engine (Tesseract, via
-   Homebrew, winget or your Linux package manager) plus English and Maltese language data.
+3. runs `mtnews-dl doctor`, offering to install the rest: the OCR engine (Tesseract, via
+   Homebrew, winget or your Linux package manager) with English and Maltese language data,
+   and, if no Chrome is installed, a private browser for the Times of Malta archive
+   (Google's Chrome for Testing, about 150 MB, kept in mtnews-dl's own folder).
 
 Run the installer again to update. Uninstall: `uv tool uninstall mtnews-dl`.
 To install straight from GitHub instead (needs git access to this private repo), set
@@ -95,9 +97,12 @@ has seen in a link record (seeded with all links since 2024-11-19), so older e-p
 stay downloadable. Only links the publisher listed are used.
 
 **Times of Malta archive** (`--archive`, premium subscription) — the archive serves one PDF per
-page with a daily page allowance (about 300). tom-dl drives *your own signed-in Chrome*
-through a small extension (`tom-dl connect`); it never reads cookies or passwords. Every page
-click is counted in a local rolling 24-hour ledger *before* it happens (default ceiling 290),
+page with a daily page allowance. tom-dl drives a browser you are signed in to through a
+small extension (`tom-dl connect`); it never reads cookies or passwords. With Chrome
+installed you load the extension once into your normal Chrome; without it (or with
+`tom-dl connect --own-browser`) tom-dl uses its own window (Chrome for Testing, separate
+profile, extension preloaded) where you sign in once. Every page
+click is counted in a local rolling 24-hour ledger *before* it happens (default 302 pages; change with `--ceiling N`),
 uncertain attempts stay counted, and an issue is joined into one PDF only when every listed
 page is saved and verified. Security checks, sign-in pages and quota notices pause the run.
 
