@@ -102,8 +102,9 @@ small extension (`tom-dl connect`); it never reads cookies or passwords. With Ch
 installed you load the extension once into your normal Chrome; without it (or with
 `tom-dl connect --own-browser`) tom-dl uses its own window (Chrome for Testing, separate
 profile, extension preloaded) where you sign in once. Every page
-click is counted in a local rolling 24-hour ledger *before* it happens (default 302 pages; change with `--ceiling N`),
-uncertain attempts stay counted, and an issue is joined into one PDF only when every listed
+click is counted in a local rolling 24-hour ledger *before* it happens (default 302 pages; change with `--ceiling N`).
+The count is per user, not per folder, so every library and year folder (and two runs at
+once) share one allowance. Uncertain attempts stay counted, and an issue is joined into one PDF only when every listed
 page is saved and verified. Security checks, sign-in pages and quota notices pause the run.
 
 **MediaToday (mttd)** — publisher-linked issue PDFs from the Uberflip archives. Year selections

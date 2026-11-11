@@ -7,7 +7,8 @@ from mtnews_dl.sources.tom_archive.ledger import Ledger, WINDOW
 class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.ledger = Ledger(self.temp.name)
+        self.usage = Path(self.temp.name) / 'account' / 'usage.sqlite3'
+        self.ledger = Ledger(self.temp.name, self.usage)
 
     def tearDown(self):
         self.ledger.close()
@@ -17,7 +18,7 @@ class LedgerTests(unittest.TestCase):
         self.ledger.manual(289, now=100000)
         self.ledger.reserve('20211101-001', 290, now=100001)
         self.ledger.close()
-        self.ledger = Ledger(self.temp.name)
+        self.ledger = Ledger(self.temp.name, self.usage)
         with self.assertRaises(RuntimeError):
             self.ledger.reserve('20211101-002', 290, now=100002)
         self.assertEqual(self.ledger.used(100002), 290)
@@ -60,3 +61,42 @@ class LedgerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SharedAllowanceTests(unittest.TestCase):
+    """The allowance is per account: every library folder draws on one count."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        base = Path(self.temp.name)
+        self.usage = base / 'account' / 'usage.sqlite3'
+        self.a = Ledger(base / '2022', self.usage)
+        self.b = Ledger(base / '2023', self.usage)
+
+    def tearDown(self):
+        self.a.close()
+        self.b.close()
+        self.temp.cleanup()
+
+    def test_two_libraries_share_one_count(self):
+        self.a.manual(300, now=100000)
+        self.b.reserve('20230101-001', 301, now=100001)
+        with self.assertRaises(RuntimeError):
+            self.a.reserve('20220101-001', 301, now=100002)
+        self.assertEqual(self.a.used(100002), 301)
+        self.assertEqual(self.b.used(100002), 301)
+
+    def test_usage_stored_in_a_library_moves_to_the_account_once(self):
+        import sqlite3
+        old = Path(self.temp.name) / 'imported'
+        old.mkdir()
+        db = sqlite3.connect(old / 'progress.sqlite3')
+        db.execute('CREATE TABLE usage (id INTEGER PRIMARY KEY, ts REAL NOT NULL, '
+                   'pages INTEGER NOT NULL, page_id TEXT, status TEXT NOT NULL)')
+        db.execute("INSERT INTO usage(ts,pages,page_id,status) VALUES (100000, 120, NULL, 'manual')")
+        db.commit()
+        db.close()
+        for _ in range(2):   # opening again must not count it twice
+            ledger = Ledger(old, self.usage)
+            ledger.close()
+        self.assertEqual(self.a.used(100001), 120)

@@ -47,12 +47,13 @@ class IssueDateRedirect(IssueUnavailable):
 
 class Runner:
     """config: folder (archive state root), interval (s), ceiling (pages per rolling 24 h),
-    auto_resume (wait for the local allowance instead of stopping)."""
+    auto_resume (wait for the local allowance instead of stopping), usage_db (optional:
+    the per-user allowance database; tests point it elsewhere)."""
 
     def __init__(self, config, emit, stop):
         self.c, self.emit, self.stop = config, emit, stop
         self.root = Path(config['folder']).resolve()
-        self.ledger = Ledger(self.root)
+        self.ledger = Ledger(self.root, config.get('usage_db'))
         self.last_request = 0
         self.recovery_checked = set()
         self.pages_requested = 0

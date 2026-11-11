@@ -322,7 +322,8 @@ def cmd_archive(args):
             ledger.manual(args.pages)
         stats = ledger.stats()
         print(f"Archive state: {target}\nPages used in the last 24 hours: {stats['used_24h']} "
-              f"(local count; default allowance {DEFAULT_CEILING})\nSaved pages: {stats['saved_pages']} "
+              f"(local count shared by all libraries; default allowance {DEFAULT_CEILING})\n"
+              f"Saved pages in this library: {stats['saved_pages']} "
               f"({stats['bytes'] / 1e6:.0f} MB); issues inventoried: {stats['listed_issues']}")
         if stats["used_24h"]:
             free = dt.datetime.fromtimestamp(ledger.next_release()).strftime("%Y-%m-%d %H:%M")

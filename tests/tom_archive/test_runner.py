@@ -13,6 +13,7 @@ class RunnerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.runner = Runner(dict(folder=str(self.root), ceiling=290, interval=5,
+                                  usage_db=str(self.root / 'account-usage.sqlite3'),
                                   auto_resume=False), lambda message: None, threading.Event())
         self.item = ('20211101-001', 'https://timesofmalta.com/download/20211101-001', 'https://timesofmalta.com/archive/issue?from=2021-11-01')
         self.runner.ledger.inventory('2021-11-01', [self.item])
