@@ -22,6 +22,7 @@ from ...common.paths import data_dir, ensure_private_dir
 PORT = 18769
 EXTENSION_ID = "bahlcnkdemiaaeaphadjidhhdoohpdod"   # fixed by the "key" in extension/manifest.json
 BRIDGE_URL = f"chrome-extension://{EXTENSION_ID}/bridge.html"
+BRIDGE_VERSION = "3"   # must match bridge.js; an older connection tab is told to reload
 EXTENSION_FILES = ("manifest.json", "background.js", "bridge.html", "bridge.js")
 
 
@@ -91,6 +92,8 @@ class ChromeBridge:
             raise RuntimeError("The Chrome extension is not set up yet. Run: tom-dl connect")
         self.commands, self.results = queue.Queue(), queue.Queue()
         self.connected = threading.Event()
+        self.stale_told = False
+        self.emit_stale = lambda: None
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -102,7 +105,7 @@ class ChromeBridge:
                 origin = self.headers.get('Origin', '')
                 if origin.startswith('chrome-extension://'):
                     self.send_header('Access-Control-Allow-Origin', origin)
-                    self.send_header('Access-Control-Allow-Headers', 'X-Bridge-Token, Content-Type')
+                    self.send_header('Access-Control-Allow-Headers', 'X-Bridge-Token, X-Bridge-Version, Content-Type')
                     self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -119,6 +122,13 @@ class ChromeBridge:
                     return self.reply(403, {'error': 'Unauthorized'})
                 if self.path != '/command':
                     return self.reply(404, {})
+                if self.headers.get('X-Bridge-Version') != BRIDGE_VERSION:
+                    # Connection tab still runs code from before an update; its files are
+                    # already refreshed, so a reload picks up the new version.
+                    if not bridge.stale_told:
+                        bridge.stale_told = True
+                        bridge.emit_stale()
+                    return self.reply(200, {'id': 'reload', 'action': 'reload'})
                 bridge.connected.set()
                 try:
                     command = bridge.commands.get_nowait()
@@ -262,10 +272,15 @@ from contextlib import contextmanager  # noqa: E402
 @contextmanager
 def chrome_page(stop, emit, timeout=60):
     """Start the loopback bridge and wait for the extension's connection tab."""
+    if read_token():
+        install_extension()   # refresh the extension's files after an update (token is kept)
     try:
         bridge = ChromeBridge(stop)
     except OSError as exc:
         raise NotConnected(f"Port {PORT} is in use (another tom-dl run?): {exc}") from None
+    bridge.emit_stale = lambda: emit(
+        "The tom-dl connection tab is from an older version; asking it to reload. If it does not "
+        "connect, reload that tab (F5) or close tom-dl's browser window and run the command again.")
     try:
         emit("Waiting for the tom-dl connection tab in Chrome…")
         deadline = time.monotonic() + timeout

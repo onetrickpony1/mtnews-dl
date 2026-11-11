@@ -37,6 +37,10 @@ class Stopped(Exception):
     pass
 
 
+class SiteLimit(RuntimeError):
+    pass
+
+
 class IssueUnavailable(RuntimeError):
     pass
 
@@ -303,6 +307,12 @@ class Runner:
             self.log(f'Saved {page_id} ({dest.stat().st_size:,} bytes).')
             return True
         except Exception as exc:
+            if 'SITE_LIMIT' in str(exc):
+                self.ledger.refused(usage_id)
+                raise SiteLimit('Times of Malta says the archive download limit is exceeded for today '
+                                f'(at {page_id}); nothing was saved. Try again tomorrow: the same command '
+                                'resumes where it stopped. The site counts pages downloaded anywhere on '
+                                'your account, so tom-dl\'s local count can be lower.') from None
             raise RuntimeError(f'{page_id}: this page is listed, but its download failed: {exc}. The issue remains incomplete; saved pages are retained. Attempt remains counted; stopped to avoid duplicate charges.') from exc
 
     def assemble(self, date, items):

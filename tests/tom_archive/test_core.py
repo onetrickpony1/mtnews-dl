@@ -100,3 +100,63 @@ class SharedAllowanceTests(unittest.TestCase):
             ledger = Ledger(old, self.usage)
             ledger.close()
         self.assertEqual(self.a.used(100001), 120)
+
+
+class NetworkShareTests(unittest.TestCase):
+    """CIFS mounts refuse SQLite's locks at once; the library then uses a lock file."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.base = Path(self.temp.name)
+        self.usage = self.base / 'account' / 'usage.sqlite3'
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def refusing_locks(self):
+        from unittest import mock
+        import sqlite3
+        from mtnews_dl.sources.tom_archive import ledger as module
+        real = sqlite3.connect
+
+        class Refusing:          # like CIFS: the first write's commit is refused
+            def __init__(self, db):
+                self.db = db
+
+            def execute(self, sql, *args):
+                return self.db.execute(sql, *args)
+
+            def commit(self):
+                raise sqlite3.OperationalError('database is locked')
+
+            def close(self):
+                self.db.close()
+
+        def connect(target, *args, **kwargs):
+            db = real(target, *args, **kwargs)
+            return Refusing(db) if '.lock-probe-' in str(target) else db
+        return mock.patch.object(module.sqlite3, 'connect', connect)
+
+    def test_share_without_locks_uses_lock_file_and_works(self):
+        from mtnews_dl.sources.tom_archive.ledger import LibraryBusy
+        library = self.base / 'share'
+        with self.refusing_locks():
+            ledger = Ledger(library, self.usage)
+            self.assertTrue((library / 'progress.sqlite3.lock').exists())
+            ledger.inventory('2021-11-01', [('20211101-001', 'u', 's')])
+            with self.assertRaises(LibraryBusy):
+                Ledger(library, self.usage)
+            ledger.close()
+            self.assertFalse((library / 'progress.sqlite3.lock').exists())
+            again = Ledger(library, self.usage)
+            self.assertEqual(again.stats()['listed_issues'], 1)
+            again.close()
+
+    def test_lock_left_by_a_crashed_run_on_this_computer_is_cleared(self):
+        import socket
+        library = self.base / 'share'
+        library.mkdir()
+        (library / 'progress.sqlite3.lock').write_text(f'{socket.gethostname()} 999999999', encoding='utf-8')
+        with self.refusing_locks():
+            ledger = Ledger(library, self.usage)
+            ledger.close()

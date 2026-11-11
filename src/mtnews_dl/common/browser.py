@@ -182,7 +182,10 @@ def launch_own_browser(extension: Path, urls) -> bool:
     if not own_browser_running():
         urls = [u for u in urls if not u.startswith("chrome-extension://")]
     args = [exe, f"--user-data-dir={profile}", f"--load-extension={extension}",
-            "--no-first-run", "--no-default-browser-check", *urls]
+            "--no-first-run", "--no-default-browser-check",
+            # The connection tab works in the background; keep Chrome from slowing its timers.
+            "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows", *urls]
     kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     if os.name == "nt":
         kw["creationflags"] = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP

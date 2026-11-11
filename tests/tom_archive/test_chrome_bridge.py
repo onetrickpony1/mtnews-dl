@@ -4,7 +4,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
-from mtnews_dl.sources.tom_archive.chrome_bridge import ChromeBridge
+from mtnews_dl.sources.tom_archive.chrome_bridge import BRIDGE_VERSION, ChromeBridge
 
 class BridgeTests(unittest.TestCase):
     def setUp(self):
@@ -12,8 +12,11 @@ class BridgeTests(unittest.TestCase):
         self.url = 'http://127.0.0.1:' + str(self.bridge.server.server_port)
     def tearDown(self):
         self.bridge.close()
-    def request(self, path, data=None, token='test-secret'):
-        request = urllib.request.Request(self.url + path, data=json.dumps(data).encode() if data is not None else None, headers={'X-Bridge-Token': token})
+    def request(self, path, data=None, token='test-secret', version=BRIDGE_VERSION):
+        headers = {'X-Bridge-Token': token}
+        if version:
+            headers['X-Bridge-Version'] = version
+        request = urllib.request.Request(self.url + path, data=json.dumps(data).encode() if data is not None else None, headers=headers)
         with urllib.request.urlopen(request, timeout=3) as response:
             return json.load(response)
     def test_unauthenticated_client_cannot_take_command(self):
@@ -23,6 +26,15 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 403)
         self.assertEqual(self.request('/command')['id'], 'secret-command')
         self.assertIsNone(self.request('/command'))
+    def test_connection_tab_from_older_version_is_told_to_reload(self):
+        told = []
+        self.bridge.emit_stale = lambda: told.append(1)
+        self.bridge.commands.put({'id': 'kept', 'action': 'snapshot'})
+        for _ in range(2):
+            self.assertEqual(self.request('/command', version=None)['action'], 'reload')
+        self.assertEqual(told, [1])
+        self.assertFalse(self.bridge.connected.is_set())
+        self.assertEqual(self.request('/command')['id'], 'kept')   # nothing lost meanwhile
     def test_real_http_command_result_round_trip(self):
         results = queue.Queue()
         worker = threading.Thread(target=lambda: results.put(self.bridge.call('snapshot')))

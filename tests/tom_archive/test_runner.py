@@ -50,6 +50,18 @@ class RunnerTests(unittest.TestCase):
             self.runner.save_page(page, self.item)
         self.assertEqual(page.locator.return_value.click.call_count, 1)
 
+    def test_site_limit_notice_stops_counted_but_not_uncertain(self):
+        from mtnews_dl.sources.tom_archive.runner import SiteLimit
+        page = self.page()
+        page.locator.return_value.click.side_effect = RuntimeError(
+            'SITE_LIMIT: the site says "Download limit exceeded for today". No PDF was served.')
+        with self.assertRaisesRegex(SiteLimit, 'exceeded for today'):
+            self.runner.save_page(page, self.item)
+        self.assertEqual(self.runner.ledger.used(), 1)
+        self.assertFalse(self.runner.ledger.uncertain(self.item[0]))
+        page.locator.return_value.click.side_effect = None
+        self.assertTrue(self.runner.save_page(self.page(), self.item))   # tomorrow: no block
+
     def test_merge_requires_every_listed_page(self):
         second = ('20211101-002', self.item[1].replace('001', '002'), self.item[2])
         self.runner.ledger.inventory('2021-11-01', [self.item, second])

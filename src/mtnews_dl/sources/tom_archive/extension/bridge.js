@@ -1,18 +1,25 @@
 let archiveTab;
 const status = document.querySelector('#status');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const headers = {'X-Bridge-Token': BRIDGE_TOKEN, 'Content-Type': 'application/json'};
+// Must match BRIDGE_VERSION in chrome_bridge.py; tom-dl asks an older tab to reload itself.
+const BRIDGE_VERSION = '3';
+const headers = {'X-Bridge-Token': BRIDGE_TOKEN, 'X-Bridge-Version': BRIDGE_VERSION,
+                 'Content-Type': 'application/json'};
 function allowed(url, download = false) {
   const u = new URL(url);
   if (u.origin !== 'https://timesofmalta.com' || (download && !/^\/download\/\d{8}-\d+$/.test(u.pathname)))
     throw Error('Unsupported URL; stopped.');
 }
 async function tab() {
+  // localStorage is shared by this extension's pages, so a reopened connection tab finds the
+  // archive tab the previous one used.
+  if (!archiveTab) archiveTab = Number(localStorage.getItem('archiveTab')) || null;
   if (archiveTab) {
     try { return await chrome.tabs.get(archiveTab); } catch (_) { archiveTab = null; }
   }
   const t = await chrome.tabs.create({url: 'about:blank'});
   archiveTab = t.id;
+  localStorage.setItem('archiveTab', String(t.id));
   return t;
 }
 async function loaded(id) {
@@ -74,6 +81,20 @@ async function download(id, url) {
     }});
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
+      if (downloadId === undefined) {
+        // A refused download opens a notice page in the tab instead of starting a file.
+        const t = await chrome.tabs.get(id);
+        if (t.status === 'complete' && t.url && new URL(t.url).pathname.startsWith('/download/')) {
+          let text = '';
+          try {
+            const [r] = await chrome.scripting.executeScript({target: {tabId: id},
+              func: () => document.body ? document.body.innerText.slice(0, 5000) : ''});
+            text = r.result || '';
+          } catch (_) { /* a PDF viewer or a page still loading */ }
+          if (/download limit.{0,30}(reached|exceeded)|daily.{0,30}limit.{0,30}reached/i.test(text))
+            throw Error('SITE_LIMIT: the site says "Download limit exceeded for today". No PDF was served.');
+        }
+      }
       if (downloadId !== undefined) {
         const [item] = await chrome.downloads.search({id: downloadId});
         if (item.state === 'interrupted') throw Error('Chrome download interrupted: ' + item.error);
@@ -113,6 +134,7 @@ async function loop() {
       if (!response.ok) throw Error('Connection rejected; reload the installed companion extension.');
       const command = await response.json();
       status.textContent = 'Connected to tom-dl.';
+      if (command && command.action === 'reload') { location.reload(); return; }
       if (command) {
         let result;
         try { result = {id: command.id, value: await execute(command)}; }
@@ -124,14 +146,14 @@ async function loop() {
     await sleep(500);
   }
 }
-// One connection tab only: tom-dl may open another when its window is already running.
-// The oldest one stays (it owns the archive tab); a newer duplicate closes itself.
+// One connection tab only: the newest wins (it runs the current code after an update) and
+// closes older ones, taking over their archive tab instead of opening another.
 async function onlyConnection() {
   const me = await chrome.tabs.getCurrent();
   const tabs = await chrome.tabs.query({url: chrome.runtime.getURL('bridge.html')});
-  const older = tabs.filter(t => t.id < me.id);
-  if (!older.length) return true;
-  await chrome.tabs.remove(me.id);
-  return false;
+  if (tabs.some(t => t.id > me.id)) { await chrome.tabs.remove(me.id); return false; }
+  const older = tabs.filter(t => t.id < me.id).map(t => t.id);
+  if (older.length) await chrome.tabs.remove(older);
+  return true;
 }
 onlyConnection().then(only => { if (only) loop(); }, () => loop());

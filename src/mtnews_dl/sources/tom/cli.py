@@ -286,7 +286,7 @@ Tip: in Chrome's download settings, turn off "Ask where to save each file".
 
 
 def cmd_archive(args):
-    from ..tom_archive.ledger import Ledger
+    from ..tom_archive.ledger import Ledger, connect_library_db
     root, flat = destination(args)
     library = Library(root, flat=flat)
     target = library.archive_root()
@@ -300,11 +300,14 @@ def cmd_archive(args):
             return EXIT_ERROR
         target.mkdir(parents=True, exist_ok=True)
         src = sqlite3.connect(old / "progress.sqlite3")
-        dst = sqlite3.connect(target / "progress.sqlite3")
-        with dst:
+        dst, lock = connect_library_db(target / "progress.sqlite3")   # shares may refuse SQLite locks
+        try:
             src.backup(dst)
-        src.close()
-        dst.close()
+        finally:
+            src.close()
+            dst.close()
+            if lock:
+                lock.unlink(missing_ok=True)
         if (old / "pages").is_dir():
             shutil.copytree(old / "pages", target / "pages", dirs_exist_ok=True)
         ledger = Ledger(target)

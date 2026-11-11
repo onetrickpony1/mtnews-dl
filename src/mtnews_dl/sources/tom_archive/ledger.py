@@ -6,6 +6,8 @@ counted once per user (``<tom-dl data dir>/archive-usage.sqlite3``) and shared b
 library, e.g. the per-year folders that ``mtnews-dl download --root`` uses.
 """
 import hashlib
+import os
+import socket
 import sqlite3
 import time
 from pathlib import Path
@@ -13,6 +15,7 @@ from pathlib import Path
 from ...common.paths import data_dir
 
 WINDOW = 24 * 60 * 60
+LOCK_WAIT = 15
 USAGE_DB = 'archive-usage.sqlite3'
 USAGE_TABLE = (
     'CREATE TABLE IF NOT EXISTS usage ('
@@ -25,11 +28,103 @@ def usage_path() -> Path:
     return data_dir('tom-dl') / USAGE_DB
 
 
+class LibraryBusy(RuntimeError):
+    pass
+
+
+def _alive(pid):
+    if os.name == 'nt':   # os.kill(pid, 0) would terminate the process on Windows
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return kernel32.GetLastError() == 5   # access denied: it exists
+        code = ctypes.c_ulong()
+        try:
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OSError):
+        return True
+    return True
+
+
+def _take_lock(lock: Path):
+    """Exclusive-create lock file: works on SMB/NFS shares where SQLite's byte-range locks don't."""
+    me = f'{socket.gethostname()} {os.getpid()}'
+    for _ in range(2):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o664)
+        except FileExistsError:
+            try:
+                host, pid = lock.read_text(encoding='utf-8').split()
+                stale = host == socket.gethostname() and not _alive(int(pid))
+            except (OSError, ValueError):
+                stale = False
+            if stale:
+                lock.unlink(missing_ok=True)
+                continue
+            raise LibraryBusy(f'Another tom-dl run is using this library ({lock}). If none is running, '
+                              'delete that file and try again.')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(me)
+        return lock
+    raise LibraryBusy(f'Could not lock {lock}.')
+
+
+def _folder_locks(folder: Path) -> bool:
+    """Can SQLite commit in this folder? Tried on a new file nobody else uses, so a failure
+    means the file system (e.g. a CIFS share) refuses SQLite's locks, not that it is busy."""
+    probe = folder / f'.lock-probe-{socket.gethostname()}-{os.getpid()}.sqlite3'
+    db = sqlite3.connect(probe, timeout=0)
+    try:
+        db.execute('CREATE TABLE t (x)')
+        db.commit()
+        return True
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc) or 'I/O' in str(exc):
+            return False
+        raise
+    finally:
+        db.close()
+        for leftover in (probe, probe.with_name(probe.name + '-journal')):
+            try:
+                leftover.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def connect_library_db(path: Path):
+    """Open a library database. Network shares (e.g. CIFS mounts) often refuse SQLite's file
+    locks ("database is locked"); there tom-dl opens it without them and keeps other tom-dl runs
+    out with a lock file instead. Returns (connection, lock file or None)."""
+    if _folder_locks(path.parent):
+        return sqlite3.connect(path, timeout=LOCK_WAIT), None
+    lock = _take_lock(path.with_name(path.name + '.lock'))
+    try:
+        return sqlite3.connect(path.resolve().as_uri() + '?nolock=1', uri=True), lock
+    except Exception:
+        lock.unlink(missing_ok=True)
+        raise
+
+
 class Ledger:
     def __init__(self, root, usage_db=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.root / 'progress.sqlite3')
+        self.db, self.lock = connect_library_db(self.root / 'progress.sqlite3')
+        self.usage = None
+        try:
+            self._open(usage_db)
+        except BaseException:
+            self.close()
+            raise
+
+    def _open(self, usage_db):
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS issues (
                 date TEXT PRIMARY KEY, status TEXT NOT NULL, count INTEGER NOT NULL);
@@ -62,7 +157,11 @@ class Ledger:
 
     def close(self):
         self.db.close()
-        self.usage.close()
+        if self.usage:
+            self.usage.close()
+        if self.lock:
+            self.lock.unlink(missing_ok=True)
+            self.lock = None
 
     def inventory(self, date, links):
         with self.db:
@@ -120,6 +219,11 @@ class Ledger:
                             (str(path.relative_to(self.root)), hashlib.sha256(path.read_bytes()).hexdigest(),
                              path.stat().st_size, page_id))
         self.usage.execute('UPDATE usage SET status=? WHERE id=?', ('saved', usage_id))
+
+    def refused(self, usage_id):
+        """The site refused this attempt outright (e.g. its daily limit notice): no PDF can be
+        in flight, so it is not uncertain. It stays in the local count to stay on the safe side."""
+        self.usage.execute('UPDATE usage SET status=? WHERE id=?', ('refused', usage_id))
 
     def recover(self, page_id, path, downloaded_at=None):
         # Reuse the existing reservation even if the app died before marking it saved.
