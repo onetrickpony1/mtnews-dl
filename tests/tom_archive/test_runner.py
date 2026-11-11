@@ -140,3 +140,74 @@ class RunnerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SignInTests(unittest.TestCase):
+    """tom-dl connect: a sign-in done in any tab is noticed by reloading the archive tab."""
+
+    class Page:
+        def __init__(self, signed_in_after):
+            self.url, self.loads, self.after = '', 0, signed_in_after
+
+        def goto(self, url, **kwargs):
+            self.loads += 1
+            self.url = url if self.loads > self.after else url + '/restricted-access'
+            if self.loads <= self.after:
+                raise RuntimeError('Chrome reached restricted-access')
+
+        def title(self):
+            return 'Times of Malta'
+
+        def locator(self, selector):
+            return Mock(inner_text=Mock(return_value='Digital Archive'))
+
+        def get_by_role(self, *args, **kwargs):
+            return Mock()
+
+    def runner(self, temp, messages):
+        clock = [0.0]
+        runner = Runner(dict(folder=temp, interval=0, ceiling=290, auto_resume=False,
+                             usage_db=str(Path(temp) / 'usage.sqlite3')),
+                        messages.append, threading.Event())
+        runner.wait = lambda seconds: clock.__setitem__(0, clock[0] + max(0, seconds))
+        return runner, clock
+
+    def test_reloads_subscription_page_until_signed_in(self):
+        with tempfile.TemporaryDirectory() as temp:
+            messages = []
+            runner, clock = self.runner(temp, messages)
+            page = self.Page(signed_in_after=2)
+            import mtnews_dl.sources.tom_archive.runner as module
+            real = module.time.monotonic
+            module.time.monotonic = lambda: clock[0]
+            try:
+                self.assertTrue(runner.wait_for_sign_in(page, recheck=20))
+            finally:
+                module.time.monotonic = real
+                runner.ledger.close()
+            self.assertEqual(page.loads, 3)
+            self.assertEqual(sum('click "Log in"' in m for m in messages), 1)
+
+    def test_leaves_a_tab_the_user_moved_to_the_login_form(self):
+        with tempfile.TemporaryDirectory() as temp:
+            messages = []
+            runner, clock = self.runner(temp, messages)
+            page = self.Page(signed_in_after=99)
+            original = page.goto
+
+            def goto(url, **kwargs):
+                try:
+                    original(url)
+                finally:
+                    page.url = 'https://timesofmalta.com/login'   # user clicked "Log in"
+            page.goto = goto
+            import mtnews_dl.sources.tom_archive.runner as module
+            real = module.time.monotonic
+            module.time.monotonic = lambda: clock[0]
+            try:
+                with self.assertRaises(RuntimeError):
+                    runner.wait_for_sign_in(page, timeout=120, recheck=20)
+            finally:
+                module.time.monotonic = real
+                runner.ledger.close()
+            self.assertEqual(page.loads, 1)

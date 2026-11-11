@@ -124,4 +124,14 @@ async function loop() {
     await sleep(500);
   }
 }
-loop();
+// One connection tab only: tom-dl may open another when its window is already running.
+// The oldest one stays (it owns the archive tab); a newer duplicate closes itself.
+async function onlyConnection() {
+  const me = await chrome.tabs.getCurrent();
+  const tabs = await chrome.tabs.query({url: chrome.runtime.getURL('bridge.html')});
+  const older = tabs.filter(t => t.id < me.id);
+  if (!older.length) return true;
+  await chrome.tabs.remove(me.id);
+  return false;
+}
+onlyConnection().then(only => { if (only) loop(); }, () => loop());

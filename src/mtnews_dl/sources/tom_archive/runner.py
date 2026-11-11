@@ -84,18 +84,26 @@ class Runner:
                 return
             raise RuntimeError(f'Server returned HTTP {response.status}. Paused. Retry-After: {retry or "not supplied"}')
 
-    def wait_for_sign_in(self, page, timeout=600, challenge_timeout=60):
-        """Open the archive in Chrome and wait until it is usable (the user signs in there)."""
-        self.log('Opening the archive in your Chrome. Sign in there if asked; tom-dl waits until '
-                 'the Digital Archive is visible (Ctrl+C to stop).')
-        try:
-            self.navigate(page, BASE + '/archive', interactive=True)
-        except Exception as exc:
-            self.log(f'Navigation did not finish: {exc}. Complete it in Chrome.')
+    def wait_for_sign_in(self, page, timeout=600, challenge_timeout=60, recheck=20):
+        """Open the archive in Chrome and wait until it is usable (the user signs in there).
+
+        While the archive tab still shows the subscription page it is reloaded every `recheck`
+        seconds, so a sign-in made in any tab is noticed; a tab the user has moved on (to the
+        login form, say) is left alone. Page views cost nothing; no PDF is requested."""
+        self.log('Opening the Times of Malta archive in the browser window (Ctrl+C to stop).')
         deadline = time.monotonic() + timeout
         challenge_since = None
+        told = False
+        opened = None
         while time.monotonic() < deadline:
             self.check()
+            if opened is None or ('/restricted-access' in page.url
+                                  and time.monotonic() - opened >= recheck):
+                opened = time.monotonic()
+                try:
+                    self.navigate(page, BASE + '/archive', interactive=True)
+                except Exception:
+                    pass   # e.g. redirected to the subscription page; the checks below decide
             try:
                 title = page.title()
                 body = page.locator('body').inner_text(timeout=1000)
@@ -111,7 +119,11 @@ class Runner:
                 try:
                     self.verify_archive(page)
                 except Exception:
-                    pass
+                    if not told and ('/restricted-access' in page.url or '/login' in page.url):
+                        told = True
+                        self.log('Not signed in yet. In the browser window, click "Log in" on the Times of '
+                                 'Malta page and sign in with your premium account. tom-dl notices by '
+                                 f'itself (it rechecks every {recheck} s); leave this running.')
                 else:
                     self.log('Archive access verified in your Chrome profile.')
                     return True
