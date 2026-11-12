@@ -49,6 +49,43 @@ class UmbrellaTests(unittest.TestCase):
         self.assertEqual(self.calls, [("mttd", ["download", "2026-10", "-P", "out", "--delay", "4", "--dry-run"])])
 
 
+class CtrlCTests(unittest.TestCase):
+    """Ctrl+C in one tool stops mtnews-dl, whatever exit code the tool returns."""
+
+    def setUp(self):
+        from mtnews_dl.common import cliargs
+        self.cliargs = cliargs
+        cliargs._INTERRUPTED.clear()
+        self.addCleanup(cliargs._INTERRUPTED.clear)
+
+    def test_interrupted_tool_stops_the_remaining_years(self):
+        import threading
+        calls = []
+
+        def fake_main(src):
+            def run(argv):
+                calls.append(argv)
+                handler = self.cliargs.sigint_handler(threading.Event())
+                handler(2, None)          # Ctrl+C while the tool works
+                return 6                  # ...surfacing as "stopped by the site"
+            return run
+        with mock.patch.object(umbrella.Source, "main", fake_main):
+            code = umbrella.main(["download", "--from", "2023-12-31", "--to", "2024-01-01",
+                                  "--root", "news", "-s", "tom", "--archive"])
+        self.assertEqual(code, 130)
+        self.assertEqual(len(calls), 1)
+
+    def test_second_ctrl_c_quits_even_in_a_new_run(self):
+        import threading
+        first = self.cliargs.sigint_handler(threading.Event())
+        first(2, None)
+        later = threading.Event()
+        second = self.cliargs.sigint_handler(later)
+        self.assertTrue(later.is_set())   # a run started after Ctrl+C stops at once
+        with self.assertRaises(KeyboardInterrupt):
+            second(2, None)
+
+
 if __name__ == "__main__":
     unittest.main()
 

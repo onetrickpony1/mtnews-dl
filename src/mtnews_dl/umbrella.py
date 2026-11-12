@@ -21,7 +21,7 @@ from pathlib import Path
 from . import __version__
 from .common.cliargs import (EXIT_AUTH, EXIT_ERROR, EXIT_INTERRUPTED, EXIT_NOTHING, EXIT_OK,
                              EXIT_REVIEW, EXIT_STOPPED, add_selection, check_selection,
-                             delay_seconds, expand_dates, printer)
+                             delay_seconds, expand_dates, printer, was_interrupted)
 
 _err = printer("mtnews-dl")
 
@@ -207,8 +207,9 @@ def cmd_download(args, parser):
                 argv.append("--archive")
             code = run_tool(src, argv)
             codes.append(code)
-            if code == EXIT_INTERRUPTED:
-                return code
+            if code == EXIT_INTERRUPTED or was_interrupted():
+                print("\nStopped (Ctrl+C); the remaining sources and years were not started.")
+                return EXIT_INTERRUPTED
     result = worst(codes)
     print(f"\nAll sources done (exit {result}).")
     return result
@@ -225,6 +226,8 @@ def cmd_each(args, command):
             targets = [destination_for(args, src, None)]
         for target in targets:
             codes.append(run_tool(src, [command, *target]))
+            if was_interrupted():
+                return EXIT_INTERRUPTED
     return worst(codes)
 
 

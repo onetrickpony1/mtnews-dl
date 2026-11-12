@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 
 from ... import __version__
-from ...common.cliargs import (EXIT_AUTH, EXIT_NOTHING, EXIT_REVIEW, EXIT_STOPPED, add_destination,
+from ...common.cliargs import (sigint_handler, EXIT_AUTH, EXIT_NOTHING, EXIT_REVIEW, EXIT_STOPPED, add_destination,
                                add_pacing, add_selection, check_selection, delay_seconds,
                                destination, destination_flag, expand_dates, interruptible,
                                issue_date, period, printer)
@@ -227,7 +227,7 @@ def cmd_coverage(args) -> int:
     print(f"{len(samples)} sample(s); at most {per} request(s) each, capped at {args.max_requests}; "
           f"delay {args.delay:g}s. Probes read only the first bytes of each file.")
     stop = threading.Event()
-    previous = signal.signal(signal.SIGINT, lambda *_: stop.set())
+    previous = signal.signal(signal.SIGINT, sigint_handler(stop))
     try:
         session = _session()
         items, patterns = fetch_listing(session, stop)
@@ -331,11 +331,7 @@ def cmd_download(args, parser) -> int:
     root, flat = _destination(args)
     stop = threading.Event()
 
-    def interrupt(_signum, _frame):
-        stop.set()
-        print("Stopping after the current network operation…", file=sys.stderr)
-
-    previous = signal.signal(signal.SIGINT, interrupt)
+    previous = signal.signal(signal.SIGINT, sigint_handler(stop))
     emit = lambda line: print(line, flush=True)  # noqa: E731
     library = Library(root, flat=flat)
     try:

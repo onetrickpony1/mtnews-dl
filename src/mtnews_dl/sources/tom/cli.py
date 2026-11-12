@@ -149,6 +149,9 @@ def cmd_download(args, parser):
                                   retries=args.retries, retry_missing=args.retry_missing,
                                   archive=archive)
         except StopRun as exc:
+            if stop.is_set():   # Ctrl+C surfaced as an error from Chrome or the network
+                print("Stopped. Progress is saved; rerun the same command to resume.", file=sys.stderr)
+                return EXIT_INTERRUPTED
             _err(f"{exc}\nProgress is saved; rerun the same command to resume.")
             return exc.code
         except InterruptedError:

@@ -197,16 +197,38 @@ def printer(tool):
     return err
 
 
-@contextmanager
-def interruptible(message="Stopping after the current network operation…"):
-    """Yields a threading.Event set by Ctrl+C (the first press stops cleanly)."""
-    stop = threading.Event()
+# Ctrl+C is remembered for the whole process, not per run: `mtnews-dl` runs several tools in a
+# row and must stop after the one you interrupted, and a second press anywhere quits at once.
+_INTERRUPTED = threading.Event()
+
+
+def was_interrupted() -> bool:
+    return _INTERRUPTED.is_set()
+
+
+STOP_MESSAGE = "Stopping after the current network operation… (Ctrl+C again to quit now)"
+
+
+def sigint_handler(stop, message=STOP_MESSAGE):
+    """A SIGINT handler: the first Ctrl+C sets `stop` (clean stop), a second raises
+    KeyboardInterrupt. `stop` starts set if Ctrl+C was already pressed in this process."""
+    if _INTERRUPTED.is_set():
+        stop.set()
 
     def handler(_signum, _frame):
-        if stop.is_set():
+        if _INTERRUPTED.is_set():
             raise KeyboardInterrupt
+        _INTERRUPTED.set()
         stop.set()
-        print(message, file=sys.stderr)
+        print(message, file=sys.stderr, flush=True)
+    return handler
+
+
+@contextmanager
+def interruptible(message=STOP_MESSAGE):
+    """Yields a threading.Event set by Ctrl+C (the first press stops cleanly, a second quits)."""
+    stop = threading.Event()
+    handler = sigint_handler(stop, message)
 
     try:
         previous = signal.signal(signal.SIGINT, handler)
