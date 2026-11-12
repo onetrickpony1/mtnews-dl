@@ -1,9 +1,8 @@
 # mtnews-dl installer for Windows. No admin rights needed (the optional OCR engine may ask).
 #
-#   Double-click install.cmd in the downloaded folder, or run:
-#     powershell -ExecutionPolicy ByPass -File install.ps1
-#   Straight from GitHub (needs access to the private repo through git):
-#     $env:MTNEWS_DL_SOURCE = "git+https://github.com/onetrickpony1/mtnews-dl"; .\install.ps1
+#   One line:
+#     powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/onetrickpony1/mtnews-dl/main/install.ps1 | iex"
+#   From a downloaded copy of the repository: double-click install.cmd
 #
 # What it does:
 #   1. installs uv (https://docs.astral.sh/uv/) if missing: it brings its own Python
@@ -17,11 +16,12 @@
 # "Continue": Windows PowerShell turns harmless messages from programs into errors under "Stop";
 # every step checks $LASTEXITCODE instead
 $ErrorActionPreference = "Continue"
-$Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Run as "irm ... | iex" there is no script file, so no folder to install from
+$Here = if ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { $null }
 if ($env:MTNEWS_DL_SOURCE) { $Source = $env:MTNEWS_DL_SOURCE }
 elseif ($Here -and (Test-Path (Join-Path $Here "pyproject.toml")) -and
         (Select-String -Path (Join-Path $Here "pyproject.toml") -Pattern '^name = "mtnews-dl"' -Quiet)) { $Source = $Here }
-else { $Source = "git+https://github.com/onetrickpony1/mtnews-dl" }
+else { $Source = "mtnews-dl @ https://github.com/onetrickpony1/mtnews-dl/archive/refs/heads/main.zip" }
 $Python = if ($env:MTNEWS_DL_PYTHON) { $env:MTNEWS_DL_PYTHON } else { "3.12" }
 
 function Say($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }

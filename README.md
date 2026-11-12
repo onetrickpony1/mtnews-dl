@@ -12,16 +12,28 @@ with every PDF's **printed front-page date checked** before it is filed.
 `mtnews-dl` runs any or all of them with one command. Each tool also works on its own, with
 the same options.
 
-## Install (Windows, macOS, Linux)
+## Install
 
-Download this repository (green **Code** button → *Download ZIP*, or `gh repo clone`), then:
+One line, no admin rights needed. It installs everything mtnews-dl needs: its own Python if yours is missing
+or too old, the packages, and then offers the optional extras.
 
-- **Windows:** double-click `install.cmd`
-- **macOS:** double-click `install.command` (if blocked: right-click → *Open*)
-- **Linux:** `sh install.sh` (or double-click it and choose *Run*)
+**Windows** (PowerShell):
+```
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/onetrickpony1/mtnews-dl/main/install.ps1 | iex"
+```
 
-No admin rights are needed. The installer:
-1. installs [uv](https://docs.astral.sh/uv/), which downloads its own Python if needed;
+**macOS and Linux** (Terminal):
+```
+curl -LsSf https://raw.githubusercontent.com/onetrickpony1/mtnews-dl/main/install.sh | sh
+```
+
+Then open a new terminal window. To update, run the same line again. To uninstall: `uv tool uninstall mtnews-dl`.
+
+<details><summary>What the installer does, and other ways to install</summary>
+
+The installer ([install.ps1](install.ps1), [install.sh](install.sh)):
+1. installs [uv](https://docs.astral.sh/uv/), a Python manager, if it's missing; uv downloads its own
+   Python 3.12 if needed;
 2. installs mtnews-dl and its Python packages in an isolated environment, and puts
    `mtnews-dl`, `tom-dl`, `mttd-dl` and `talkmt-dl` on your PATH;
 3. runs `mtnews-dl doctor`, offering to install the rest: the OCR engine (Tesseract, via
@@ -29,12 +41,14 @@ No admin rights are needed. The installer:
    and, if no Chrome is installed, a private browser for the Times of Malta archive
    (Google's Chrome for Testing, about 150 MB, kept in mtnews-dl's own folder).
 
-Run the installer again to update. Uninstall: `uv tool uninstall mtnews-dl`.
-To install straight from GitHub instead (needs git access to this private repo), set
-`MTNEWS_DL_SOURCE=git+https://github.com/onetrickpony1/mtnews-dl` before running it.
+Read the scripts first if you like: they are short.
 
-PDF reading uses [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) (bundled; no Poppler).
-OCR is only used when a front page has no readable date text.
+Prefer double-clicking? Download this repository (green **Code** button → *Download ZIP*), unzip it and
+double-click `install.cmd` (Windows) or `install.command` (macOS; if blocked: right-click → *Open*).
+
+With Python 3.10+ already installed you can also use `pipx install` or `pip install` with
+`https://github.com/onetrickpony1/mtnews-dl/archive/refs/heads/main.zip`.
+</details>
 
 ## Quick start
 

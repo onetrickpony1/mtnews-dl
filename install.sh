@@ -2,9 +2,8 @@
 # mtnews-dl installer for Linux and macOS. No admin rights needed (except, if you agree,
 # for the optional OCR engine through your package manager).
 #
-#   From the downloaded folder:   sh install.sh      (macOS: double-click install.command)
-#   Straight from GitHub (needs access to the private repo through git):
-#     MTNEWS_DL_SOURCE="git+https://github.com/onetrickpony1/mtnews-dl" sh install.sh
+#   One line:   curl -LsSf https://raw.githubusercontent.com/onetrickpony1/mtnews-dl/main/install.sh | sh
+#   From a downloaded copy of the repository:   sh install.sh   (macOS: double-click install.command)
 #
 # What it does:
 #   1. installs uv (https://docs.astral.sh/uv/) if missing: it brings its own Python
@@ -22,7 +21,7 @@ if [ -n "${MTNEWS_DL_SOURCE:-}" ]; then
 elif [ -f "$HERE/pyproject.toml" ] && grep -q '^name = "mtnews-dl"' "$HERE/pyproject.toml"; then
     SOURCE="$HERE"
 else
-    SOURCE="git+https://github.com/onetrickpony1/mtnews-dl"
+    SOURCE="mtnews-dl @ https://github.com/onetrickpony1/mtnews-dl/archive/refs/heads/main.zip"
 fi
 PYTHON="${MTNEWS_DL_PYTHON:-3.12}"
 
@@ -74,7 +73,12 @@ MT="$BIN/mtnews-dl"
 # 4. dependency check (+ optional OCR)
 say "Checking the installation"
 if [ -z "${CI:-}" ] && ask "Install the remaining parts: OCR engine (Tesseract) + English/Maltese data, and a browser for the Times of Malta archive if no Chrome is installed? [Y/n]" y; then
-    "$MT" doctor --fix || true
+    # Package managers may ask questions: give them the keyboard, not the piped script
+    if ( : < /dev/tty ) 2>/dev/null; then
+        "$MT" doctor --fix < /dev/tty || true
+    else
+        "$MT" doctor --fix < /dev/null || true
+    fi
 else
     "$MT" doctor || true
 fi
