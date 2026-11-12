@@ -4,7 +4,7 @@ version = "1.0.0.dev0"
 description = "Download Maltese newspaper PDFs: Times of Malta, MaltaToday titles, l-orizzont and it-Torca. Resumable, paced, with printed-date checks."
 readme = "README.md"
 license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "LEGAL.md"]
 requires-python = ">=3.10"
 dependencies = [
     "pypdfium2>=4.30",      # PDF text, rendering and merging (bundled PDFium; no Poppler needed)

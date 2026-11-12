@@ -144,7 +144,7 @@ snapshots (e.g. from the Windows feed archiver) can be added with `tom-dl feed i
 For your personal archive of papers you can access: public feeds, and your own subscriptions
 through your own login. The tools pace requests (default 2–3 s), stop on refusals and
 security checks rather than retrying, never guess credentials, and keep within the archive's
-page allowance. Respect the publishers' terms.
+page allowance. Respect the publishers' terms; see [LEGAL.md](LEGAL.md).
 
 ## Development
 
@@ -160,6 +160,6 @@ Layout: `src/mtnews_dl/common` (date checks, OCR, CLI options, paths, locks),
 
 GNU General Public License v3.0 or later (GPL-3.0-or-later). See [LICENSE](LICENSE). You may use, study,
 share and modify mtnews-dl; if you distribute it or a modified version, you must do so under the same licence
-and make the source available. It comes with no warranty, and you are responsible for using it lawfully and
-within the publishers' terms. Not affiliated with Times of Malta (Allied Newspapers), MediaToday, the
+and make the source available. Use is subject to the [Legal Notice and Terms of Use](LEGAL.md): no warranty,
+no liability, and you alone are responsible for lawful use within the publishers' terms. Not affiliated with Times of Malta (Allied Newspapers), MediaToday, the
 Internet Archive or subscribe.mt.
