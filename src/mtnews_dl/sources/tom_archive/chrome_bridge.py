@@ -22,7 +22,7 @@ from ...common.paths import data_dir, ensure_private_dir
 PORT = 18769
 EXTENSION_ID = "bahlcnkdemiaaeaphadjidhhdoohpdod"   # fixed by the "key" in extension/manifest.json
 BRIDGE_URL = f"chrome-extension://{EXTENSION_ID}/bridge.html"
-BRIDGE_VERSION = "3"   # must match bridge.js; an older connection tab is told to reload
+BRIDGE_VERSION = "4"   # must match bridge.js; an older connection tab is told to reload
 EXTENSION_FILES = ("manifest.json", "background.js", "bridge.html", "bridge.js")
 
 

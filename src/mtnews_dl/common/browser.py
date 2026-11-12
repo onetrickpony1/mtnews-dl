@@ -169,6 +169,31 @@ def own_browser_running() -> bool:
         return True
 
 
+DOWNLOAD_SITES = ("https://timesofmalta.com:443,*",)
+
+
+def allow_site_downloads(profile: Path) -> None:
+    """Let the archive site download one PDF after another in tom-dl's own profile.
+
+    Chrome otherwise blocks every download after the first from a site ("This site is trying to
+    download multiple files") until someone clicks Allow. Only written while the window is
+    closed, since Chrome rewrites Preferences on exit."""
+    prefs_file = profile / "Default" / "Preferences"
+    try:
+        prefs = json.loads(prefs_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        prefs = {}
+    exceptions = (prefs.setdefault("profile", {}).setdefault("content_settings", {})
+                  .setdefault("exceptions", {}).setdefault("automatic_downloads", {}))
+    if all(exceptions.get(site, {}).get("setting") == 1 for site in DOWNLOAD_SITES):
+        return
+    for site in DOWNLOAD_SITES:
+        exceptions[site] = {"setting": 1}
+    prefs.setdefault("download", {})["prompt_for_download"] = False
+    prefs_file.parent.mkdir(parents=True, exist_ok=True)
+    prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
+
+
 def launch_own_browser(extension: Path, urls) -> bool:
     """Start tom-dl's browser window with its own profile and the extension loaded.
 
@@ -181,6 +206,7 @@ def launch_own_browser(extension: Path, urls) -> bool:
     profile.mkdir(parents=True, exist_ok=True)
     if not own_browser_running():
         urls = [u for u in urls if not u.startswith("chrome-extension://")]
+        allow_site_downloads(profile)
     args = [exe, f"--user-data-dir={profile}", f"--load-extension={extension}",
             "--no-first-run", "--no-default-browser-check",
             # The connection tab works in the background; keep Chrome from slowing its timers.

@@ -51,3 +51,21 @@ class UmbrellaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnBrowserPrefsTests(unittest.TestCase):
+    def test_archive_site_may_download_several_files(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from mtnews_dl.common.browser import allow_site_downloads
+        with tempfile.TemporaryDirectory() as temp:
+            profile = Path(temp)
+            (profile / "Default").mkdir()
+            (profile / "Default" / "Preferences").write_text('{"keep": 1}', encoding="utf-8")
+            allow_site_downloads(profile)
+            prefs = json.loads((profile / "Default" / "Preferences").read_text(encoding="utf-8"))
+            self.assertEqual(prefs["keep"], 1)
+            self.assertEqual(prefs["profile"]["content_settings"]["exceptions"]["automatic_downloads"]
+                             ["https://timesofmalta.com:443,*"]["setting"], 1)
+            self.assertFalse(prefs["download"]["prompt_for_download"])

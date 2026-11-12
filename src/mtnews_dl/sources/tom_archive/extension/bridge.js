@@ -2,7 +2,7 @@ let archiveTab;
 const status = document.querySelector('#status');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Must match BRIDGE_VERSION in chrome_bridge.py; tom-dl asks an older tab to reload itself.
-const BRIDGE_VERSION = '3';
+const BRIDGE_VERSION = '4';
 const headers = {'X-Bridge-Token': BRIDGE_TOKEN, 'X-Bridge-Version': BRIDGE_VERSION,
                  'Content-Type': 'application/json'};
 function allowed(url, download = false) {
@@ -79,8 +79,12 @@ async function download(id, url) {
       if (links.length !== 1) throw Error('Download control changed; stopped.');
       links[0].click();
     }});
-    const deadline = Date.now() + 60000;
+    const started = Date.now(), deadline = started + 60000;
     while (Date.now() < deadline) {
+      if (downloadId === undefined && Date.now() - started > 10000 &&
+          new URL((await chrome.tabs.get(id)).url).pathname === '/archive/issue')
+        throw Error('Chrome did not start the download. If Chrome shows "This site is trying to ' +
+                    'download multiple files", click Allow, then run the same command again.');
       if (downloadId === undefined) {
         // A refused download opens a notice page in the tab instead of starting a file.
         const t = await chrome.tabs.get(id);
