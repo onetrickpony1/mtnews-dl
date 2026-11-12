@@ -12,6 +12,10 @@ with every PDF's **printed front-page date checked** before it is filed.
 `mtnews-dl` runs any or all of them with one command. Each tool also works on its own, with
 the same options.
 
+> **Legal notice:** for your own access only (public feeds and your own subscriptions), within the
+> publishers' terms. No warranty; you alone are responsible for lawful use. Read the
+> **[Legal Notice and Terms of Use](LEGAL.md)** before installing.
+
 ## Install
 
 One line, no admin rights needed. It installs everything mtnews-dl needs: its own Python if yours is missing
