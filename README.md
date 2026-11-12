@@ -155,3 +155,11 @@ python -m venv .venv && .venv/bin/pip install -e '.[test]'
 
 Layout: `src/mtnews_dl/common` (date checks, OCR, CLI options, paths, locks),
 `src/mtnews_dl/sources/{tom,tom_archive,mttd,talkmt}`, `umbrella.py` (`mtnews-dl`).
+
+## License
+
+GNU General Public License v3.0 or later (GPL-3.0-or-later). See [LICENSE](LICENSE). You may use, study,
+share and modify mtnews-dl; if you distribute it or a modified version, you must do so under the same licence
+and make the source available. It comes with no warranty, and you are responsible for using it lawfully and
+within the publishers' terms. Not affiliated with Times of Malta (Allied Newspapers), MediaToday, the
+Internet Archive or subscribe.mt.
