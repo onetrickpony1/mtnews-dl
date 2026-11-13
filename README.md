@@ -16,6 +16,19 @@ the same options.
 > publishers' terms. No warranty; you alone are responsible for lawful use. Read the
 > **[Legal Notice and Terms of Use](LEGAL.md)** before installing.
 
+## Features
+
+- **One command for every paper.** `mtnews-dl` runs any or all of the sources, and each tool also works on its own
+  with the same options.
+- **Printed date checked.** Each PDF's front-page date is read (from the text, or by OCR) before it is filed. Anything
+  that doesn't match is held for `review`.
+- **Safe to stop at any point.** Ctrl+C, then run the same command again. Nothing is downloaded twice.
+- **Paced.** Requests are spaced out, refusals and security checks stop a run rather than being retried, and the
+  Times of Malta archive keeps to its daily page allowance.
+- **Checks:** `mtnews-dl doctor` tests what is installed and ready, and offers to install what's missing.
+- **Guided mode** (`--easy`) for each tool.
+- **Linux, Windows and macOS.**
+
 ## Install
 
 One line, no admin rights needed. It installs everything mtnews-dl needs: its own Python if yours is missing
@@ -109,12 +122,12 @@ Source-specific extras:
 
 ## Sources in detail
 
-**Times of Malta e-paper** — the publisher's public feed lists whole-issue PDFs for about the
+**Times of Malta e-paper.** The publisher's public feed lists whole-issue PDFs for about the
 last two years and drops older ones, but their links keep working. tom-dl keeps every link it
 has seen in a link record (seeded with all links since 2024-11-19), so older e-paper issues
 stay downloadable. Only links the publisher listed are used.
 
-**Times of Malta archive** (`--archive`, premium subscription) — the archive serves one PDF per
+**Times of Malta archive** (`--archive`, premium subscription). The archive serves one PDF per
 page with a daily page allowance. tom-dl drives a browser you are signed in to through a
 small extension (`tom-dl connect`); it never reads cookies or passwords. With Chrome
 installed you load the extension once into your normal Chrome; without it (or with
@@ -125,13 +138,13 @@ The count is per user, not per folder, so every library and year folder (and two
 once) share one allowance. Uncertain attempts stay counted, and an issue is joined into one PDF only when every listed
 page is saved and verified. Security checks, sign-in pages and quota notices pause the run.
 
-**MediaToday (mttd)** — publisher-linked issue PDFs from the Uberflip archives. Year selections
+**MediaToday (mttd).** Publisher-linked issue PDFs from the Uberflip archives. Year selections
 use the *issue* year, falling back to the posting date for issues without a usable year. For
 June 2010–September 2013 and earlier, issues are rebuilt from the publisher's web archives
 (and, unless `--no-wayback`, the Internet Archive) as searchable PDFs; these are marked as
 reconstructions, not printed issues.
 
-**talk.mt / subscribe.mt (talkmt)** — needs your logged-in session as a Netscape `cookies.txt`
+**talk.mt / subscribe.mt (talkmt).** Needs your logged-in session as a Netscape `cookies.txt`
 export (`talkmt-dl auth --help-cookies`). Cookies are filtered to subscribe.mt, stored
 privately, and never printed or logged. See [docs/talkmt-validation.md](docs/talkmt-validation.md).
 

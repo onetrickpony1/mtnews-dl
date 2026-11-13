@@ -137,7 +137,7 @@ def chosen_sources(args, *, for_download):
 
 
 def year_chunks(args):
-    """[(year or None, selection argv)] — per year with --root, else one chunk."""
+    """[(year or None, selection argv)]: per year with --root, else one chunk."""
     if not args.root:
         sel = [*args.periods]
         if args.years:
